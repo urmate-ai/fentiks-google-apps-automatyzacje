@@ -1,0 +1,19 @@
+{
+  "name": "automatyzacjefentix",
+  "version": "1.0.0",
+  "description": "Automatyzacje Fentixa",
+  "main": "index.js",
+  "scripts": {
+    "test": "jest"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "devDependencies": {
+    "@google/clasp": "^3.0.6-alpha",
+    "@types/google-apps-script": "^2.0.1",
+    "gas-local": "^1.3.1",
+    "jest": "^30.1.3"
+  }
+}

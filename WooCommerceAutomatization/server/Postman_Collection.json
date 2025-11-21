@@ -1,0 +1,172 @@
+{
+  "info": {
+    "name": "Fentiks Proxy API",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "_postman_id": "fentiks-proxy-api-collection"
+  },
+  "item": [
+    {
+      "name": "Health",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/health",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "health"
+          ]
+        }
+      }
+    },
+    {
+      "name": "Woo ⟶ Check customer exists",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"test@example.com\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/woocommerce/customers/check",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "woocommerce",
+            "customers",
+            "check"
+          ]
+        }
+      }
+    },
+    {
+      "name": "Woo ⟶ Get userId by email",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"test@example.com\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/woocommerce/customers/getId",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "woocommerce",
+            "customers",
+            "getId"
+          ]
+        }
+      }
+    },
+    {
+      "name": "Woo ⟶ Create customer",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"firstName\": \"Jan\",\n  \"lastName\": \"Kowalski\",\n  \"email\": \"jan.kowalski@example.com\",\n  \"postcode\": \"00-000\",\n  \"city\": \"Warszawa\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/woocommerce/customers/create",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "woocommerce",
+            "customers",
+            "create"
+          ]
+        }
+      }
+    },
+    {
+      "name": "Tutor ⟶ Enroll (single)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"userId\": 123,\n  \"courseId\": 8179\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/tutor/enroll",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "tutor",
+            "enroll"
+          ]
+        }
+      }
+    },
+    {
+      "name": "Tutor ⟶ Enroll (all)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"userId\": 123\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/tutor/enroll/all",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "tutor",
+            "enroll",
+            "all"
+          ]
+        }
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "https://fentiksapi.netlify.app"
+    }
+  ]
+}
+
+

@@ -1,0 +1,16 @@
+{
+  "name": "geminiemailautomation",
+  "version": "1.0.0",
+  "description": "Automatyczne odpowiadanie na maile przy użyciu modeli Gemini i korpusu Vertex AI RAG.",
+  "main": "index.js",
+  "scripts": {
+    "test": "jest"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "devDependencies": {
+    "jest": "^30.1.3"
+  }
+}

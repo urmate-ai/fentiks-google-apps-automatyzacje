@@ -1,0 +1,16 @@
+{
+  "name": "invoicesautomation",
+  "version": "1.0.0",
+  "description": "Automatyzacja obsługi faktur dla Fentix. Projekt będzie działał podobnie do `BusinessCardAutomation`, z tą różnicą, że:",
+  "main": "index.js",
+  "scripts": {
+    "test": "jest"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "devDependencies": {
+    "jest": "^30.1.3"
+  }
+}

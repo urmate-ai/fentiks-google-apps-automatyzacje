@@ -1,0 +1,11 @@
+[build]
+  publish = "."
+  functions = "functions"
+
+[functions]
+  included_files = ["functions/certs/**"]
+
+[[redirects]]
+  from = "/api/*"
+  to = "/.netlify/functions/:splat"
+  status = 200

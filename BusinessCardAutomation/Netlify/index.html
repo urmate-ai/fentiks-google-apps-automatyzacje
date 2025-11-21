@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="pl">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Business Card Automation – Netlify</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        --bg: linear-gradient(145deg, #f0f4ff 0%, #ffffff 55%, #f9f1ff 100%);
+        --surface: rgba(255, 255, 255, 0.85);
+        --accent: #5b21b6;
+        --accent-soft: rgba(91, 33, 182, 0.08);
+        --text: #1f2933;
+        --muted: #4b5563;
+        --radius-lg: 20px;
+        --radius-md: 12px;
+        font-family: "Inter", "Segoe UI", system-ui, -apple-system, sans-serif;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        background: var(--bg);
+        color: var(--text);
+        padding: 0 1.5rem 3rem;
+        display: flex;
+        justify-content: center;
+      }
+
+      main {
+        width: min(960px, 100%);
+        margin-top: clamp(3rem, 5vw, 5rem);
+        background: var(--surface);
+        backdrop-filter: blur(12px);
+        border-radius: var(--radius-lg);
+        box-shadow: 0 30px 80px rgba(15, 23, 42, 0.12);
+        overflow: hidden;
+        border: 1px solid rgba(99, 102, 241, 0.1);
+      }
+
+      header {
+        padding: clamp(2rem, 5vw, 3rem);
+        background: radial-gradient(circle at top right, rgba(79, 70, 229, 0.15), transparent 55%);
+      }
+
+      h1 {
+        margin: 0;
+        font-size: clamp(2.2rem, 4vw, 3.1rem);
+        letter-spacing: -0.03em;
+      }
+
+      header p {
+        margin-top: 1rem;
+        max-width: 54ch;
+        font-size: 1.05rem;
+        color: var(--muted);
+        line-height: 1.7;
+      }
+
+      .badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.45rem 0.9rem;
+        border-radius: 999px;
+        background: var(--accent-soft);
+        color: var(--accent);
+        font-weight: 600;
+        font-size: 0.95rem;
+      }
+
+      section {
+        padding: 0 clamp(2rem, 5vw, 3rem) 3rem;
+      }
+
+      section + section {
+        border-top: 1px solid rgba(15, 23, 42, 0.06);
+      }
+
+      h2 {
+        font-size: clamp(1.6rem, 3vw, 2rem);
+        margin-bottom: 1rem;
+      }
+
+      p {
+        color: var(--muted);
+        line-height: 1.7;
+      }
+
+      .grid {
+        display: grid;
+        gap: 1.5rem;
+      }
+
+      .features {
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      }
+
+      .card {
+        background: #fff;
+        border-radius: var(--radius-md);
+        padding: 1.4rem;
+        border: 1px solid rgba(148, 163, 184, 0.2);
+        box-shadow: 0 18px 35px rgba(15, 23, 42, 0.06);
+      }
+
+      .card h3 {
+        margin-top: 0;
+        margin-bottom: 0.6rem;
+        font-size: 1.12rem;
+      }
+
+      .code-block {
+        background: #0f172a;
+        color: #f8fafc;
+        padding: 1.25rem;
+        border-radius: var(--radius-md);
+        overflow-x: auto;
+        font-family: "Fira Code", "SFMono-Regular", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+        font-size: 0.95rem;
+        line-height: 1.6;
+        box-shadow: inset 0 0 0 1px rgba(148, 163, 184, 0.1);
+      }
+
+      code {
+        font-family: inherit;
+        background: rgba(15, 23, 42, 0.08);
+        padding: 0.15rem 0.45rem;
+        border-radius: 6px;
+        font-size: 0.95rem;
+      }
+
+      ul {
+        margin: 0;
+        padding: 0 1.1rem;
+        color: var(--muted);
+        line-height: 1.7;
+      }
+
+      li + li {
+        margin-top: 0.5rem;
+      }
+
+      .cta {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.6rem;
+        background: var(--accent);
+        color: white;
+        padding: 0.85rem 1.4rem;
+        border-radius: 999px;
+        text-decoration: none;
+        font-weight: 600;
+        margin-top: 1.5rem;
+        box-shadow: 0 18px 40px rgba(91, 33, 182, 0.3);
+      }
+
+      footer {
+        padding: 2.5rem clamp(2rem, 5vw, 3rem) 3rem;
+        background: rgba(15, 23, 42, 0.03);
+        color: var(--muted);
+        font-size: 0.95rem;
+        text-align: center;
+      }
+
+      @media (max-width: 600px) {
+        header {
+          text-align: center;
+        }
+
+        header p {
+          margin-left: auto;
+          margin-right: auto;
+        }
+
+        .cta {
+          width: 100%;
+          justify-content: center;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header>
+        <span class="badge">Business Card Automation</span>
+        <h1>Gotowa do wdrożenia integracja Netlify Functions</h1>
+        <p>
+          Ten projekt udostępnia prosty endpoint, który generuje dane wizytówek
+          na potrzeby automatyzacji Fentix. Wdróż funkcję na Netlify i łącz ją z
+          modułami tworzącymi, wysyłającymi oraz archiwizującymi wizytówki.
+        </p>
+        <a class="cta" href="#api">Przejdź do dokumentacji API →</a>
+      </header>
+
+      <section>
+        <h2>Dlaczego automatyzacja wizytówek?</h2>
+        <div class="grid features">
+          <article class="card">
+            <h3>Spójne dane kontaktowe</h3>
+            <p>
+              Każda wizytówka jest generowana na podstawie wzorca, co eliminuje
+              literówki i gwarantuje aktualność informacji o Twoim zespole.
+            </p>
+          </article>
+          <article class="card">
+            <h3>Integracja z CRM</h3>
+            <p>
+              Użyj webhooków i automatyzacji, aby przenosić wygenerowane dane do
+              HubSpot, Pipedrive czy dowolnego systemu CRM.
+            </p>
+          </article>
+          <article class="card">
+            <h3>Wielokanałowe wykorzystanie</h3>
+            <p>
+              Łącz Business Card Automation z e-mailami powitalnymi, drukiem lub
+              generowaniem PDF, aby przygotować komplet materiałów dla klienta.
+            </p>
+          </article>
+        </div>
+      </section>
+
+      <section id="api">
+        <h2>Endpoint funkcji</h2>
+        <p>
+          Po wdrożeniu funkcji dostępny jest adres
+          <code>/.netlify/functions/business-card</code>. Dla wygody ustawiono
+          także przekierowanie na <code>/api/business-card</code>.
+        </p>
+        <div class="code-block">
+          <pre><strong>POST</strong> https://twoja-domena.netlify.app/api/business-card
+Content-Type: application/json
+
+{
+  "fullName": "Ada Lovelace",
+  "title": "AI Consultant",
+  "company": "Fentix",
+  "email": "ada.lovelace@example.com",
+  "phone": "+48 123 456 789",
+  "notes": "Preferuje kontakt mailowy"
+}</pre>
+        </div>
+        <p>
+          W odpowiedzi otrzymasz JSON zawierający dane wizytówki wraz z unikalnym
+          identyfikatorem do dalszych procesów automatyzacji.
+        </p>
+      </section>
+
+      <section>
+        <h2>Jak wystartować?</h2>
+        <ul>
+          <li>Pobierz repozytorium i przejdź do folderu <code>Netlify</code>.</li>
+          <li>
+            Utwórz nowy serwis Netlify, wskazując katalog jako źródło i wdróż go
+            (build command nie jest wymagany).
+          </li>
+          <li>
+            Przetestuj endpoint lokalnie narzędziem typu Postman lub cURL i
+            podłącz go do przepływów Integromat/Make, Zapier lub dowolnej
+            automatyzacji Fentix.
+          </li>
+        </ul>
+      </section>
+
+      <section>
+        <h2>Najlepsze praktyki integracji</h2>
+        <div class="grid">
+          <article class="card">
+            <h3>Walidacja danych</h3>
+            <p>
+              Dodaj walidację po stronie klienta, aby upewnić się, że każdy
+              atrybut wizytówki (imię, nazwisko, numer telefonu) spełnia Twoje
+              standardy jakości.
+            </p>
+          </article>
+          <article class="card">
+            <h3>Bezpieczeństwo</h3>
+            <p>
+              Ogranicz dostęp do funkcji poprzez tokeny lub podpisywane żądania,
+              jeśli udostępniasz ją zespołom zewnętrznym.
+            </p>
+          </article>
+          <article class="card">
+            <h3>Monitoring</h3>
+            <p>
+              Skonfiguruj alerty Netlify i logowanie, aby natychmiast reagować na
+              błędy. Integracja z narzędziami typu Sentry pomoże szybciej
+              diagnozować problemy.
+            </p>
+          </article>
+        </div>
+      </section>
+
+      <footer>
+        Projekt Business Card Automation jest częścią zestawu automatyzacji
+        Fentix. Skontaktuj się z zespołem, aby rozszerzyć rozwiązanie o kolejne
+        moduły.
+      </footer>
+    </main>
+  </body>
+</html>

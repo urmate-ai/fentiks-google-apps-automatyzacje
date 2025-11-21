@@ -1,0 +1,5 @@
+# Ignore Google Apps Script CLI config in all catalogues
+.clasp.json
+
+# Ignore SMS client certificates
+BusinessCardAutomation/Netlify/functions/certs/*.pem

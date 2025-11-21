@@ -1,0 +1,15 @@
+node_modules
+npm-debug.log
+Dockerfile
+.dockerignore
+.git
+.gitignore
+netlify
+*.local
+.env
+.env.*
+coverage
+**/__tests__
+**/*.test.*
+README.md
+Postman_Collection.json
