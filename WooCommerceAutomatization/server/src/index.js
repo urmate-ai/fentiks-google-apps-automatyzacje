@@ -50,6 +50,6 @@ app.post('/api/sheet/process', processSheet);
 const port = process.env.PORT || 8080;
 
 app.listen(port, () => {
-  console.log('Started Fentiks API v 1.1.6');
+  console.log('Started Fentiks API v 1.2.0');
   console.log(`Proxy API running on http://localhost:${port}`);
 });

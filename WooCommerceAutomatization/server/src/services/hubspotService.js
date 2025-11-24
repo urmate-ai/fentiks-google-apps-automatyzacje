@@ -248,6 +248,25 @@ function normalizeMobilePhone(phone) {
 }
 
 /**
+ * Normalize domain to full URL format (adds https:// if missing)
+ * HubSpot requires domain fields to be full URLs starting with http:// or https://
+ */
+function normalizeDomain(domain) {
+  if (!domain) return '';
+  
+  const domainStr = String(domain).trim();
+  if (!domainStr) return '';
+  
+  // If it already starts with http:// or https://, return as is
+  if (/^https?:\/\//i.test(domainStr)) {
+    return domainStr;
+  }
+  
+  // Otherwise, add https:// prefix
+  return `https://${domainStr}`;
+}
+
+/**
  * Map row data to HubSpot contact properties
  * Based on the commented code in 04_main.js mapujWierszNaKontakt function
  */
@@ -262,6 +281,11 @@ export function mapRowToContact(header, rowData) {
     const headerName = String(header[i] || '').toLowerCase().trim();
     const value = rowData[i];
     const normalizedValue = String(value || '').trim();
+    
+    // Debug: log domain-related columns
+    if (headerName.includes('domena') || headerName.includes('domain') || headerName === 'dom') {
+      console.log(`[HubSpot][mapRowToContact] Checking column at index ${i}: header="${header[i]}", headerName="${headerName}", value="${normalizedValue}"`);
+    }
 
     if (headerName.includes('email') || headerName.includes('e-mail')) {
       contact.email = normalizedValue;
@@ -297,8 +321,17 @@ export function mapRowToContact(header, rowData) {
     } else if (headerName.includes('pesel')) {
       // PESEL - may need to be mapped to custom property in HubSpot
       contact.pesel = normalizedValue;
-    } else if (headerName.includes('dom') || headerName.includes('nr domu') || headerName.includes('house') || headerName.includes('building')) {
+    } else if (headerName.includes('domena') || headerName.includes('domain')) {
+      // Domain field - send to HubSpot as domena_fen property (custom HubSpot field)
+      // IMPORTANT: Check for "domena" BEFORE "dom" to avoid false matches
+      // Normalize to full URL format (HubSpot requires https:// or http://)
+      if (normalizedValue) {
+        contact.domena_fen = normalizeDomain(normalizedValue);
+        console.log(`[HubSpot][mapRowToContact] Found domain column at index ${i}: header="${headerName}", value="${normalizedValue}" -> normalized="${contact.domena_fen}"`);
+      }
+    } else if (!headerName.includes('domena') && (headerName.includes('nr domu') || headerName.includes('house') || headerName.includes('building') || headerName === 'dom')) {
       // House/building number - can be combined with address
+      // Only match if it contains house/building keywords, or is exactly "dom" but NOT "domena"
       const houseNumber = normalizedValue;
       if (houseNumber && !contact.address) {
         contact.address = houseNumber;
@@ -310,6 +343,10 @@ export function mapRowToContact(header, rowData) {
 
   if (contact.phone || contact.mobilephone) {
     console.log(`[HubSpot][mapRowToContact] Mapped contact with phone: phone="${contact.phone}", mobilephone="${contact.mobilephone}"`);
+  }
+  
+  if (contact.domena_fen) {
+    console.log(`[HubSpot][mapRowToContact] Mapped contact with domain: domena_fen="${contact.domena_fen}"`);
   }
 
   return contact;
@@ -332,7 +369,7 @@ async function searchByName(token, firstname, lastname) {
           { propertyName: 'lastname', operator: 'EQ', value: lastname }
         ]
       }],
-      properties: ['email', 'phone', 'mobilephone'],
+      properties: ['email', 'phone', 'mobilephone', 'domena_fen'],
       limit: 100
     };
 
@@ -390,9 +427,24 @@ async function updateContactProperties(token, contactId, properties = {}) {
       }
     );
     logHubspotResponse('updateContactProperties', response);
-    console.log(`[HubSpot] Contact ${contactId} properties updated`, properties);
+    
+    if (response.status >= 200 && response.status < 300) {
+      console.log(`[HubSpot] Contact ${contactId} properties updated successfully`, properties);
+    } else {
+      const errorBody = response.data || response.statusText || 'Unknown error';
+      console.error(`[HubSpot] Failed to update contact ${contactId} properties:`, {
+        status: response.status,
+        statusText: response.statusText,
+        error: errorBody,
+        properties: properties
+      });
+    }
   } catch (error) {
-    console.warn('[HubSpot] Failed to update contact properties', error.message);
+    console.error('[HubSpot] Exception updating contact properties', {
+      message: error.message,
+      properties: properties,
+      contactId: contactId
+    });
   }
 }
 
@@ -529,6 +581,19 @@ export async function addContactToHubSpot(contact, sheetName) {
 
             await syncContactPhones(privateToken, contactId, contact, match.properties || {});
             
+            // Update domain if provided
+            if (contact.domena_fen) {
+              const existingDomain = (match.properties || {}).domena_fen || '';
+              // Normalize domain to full URL format (should already be normalized, but ensure it)
+              const normalizedDomain = normalizeDomain(contact.domena_fen);
+              if (existingDomain !== normalizedDomain) {
+                await updateContactProperties(privateToken, contactId, { domena_fen: normalizedDomain });
+                console.log(`[HubSpot] Domain (domena_fen) updated for contact ${contactId}: "${normalizedDomain}"`);
+              } else {
+                console.log(`[HubSpot] Domain (domena_fen) already set for contact ${contactId}: "${normalizedDomain}"`);
+              }
+            }
+            
             // Still create note for existing contact if sheetName is provided
             if (sheetName) {
               await createNoteForContact(privateToken, contactId, sheetName);
@@ -573,6 +638,14 @@ export async function addContactToHubSpot(contact, sheetName) {
       // Try standard custom property name format
       // If your HubSpot custom property has different name, update this
       payload.properties.pesel = contact.pesel;
+    }
+    
+    // Add domain if available (custom HubSpot field: domena_fen)
+    // Normalize to full URL format (should already be normalized, but ensure it)
+    if (contact.domena_fen) {
+      const normalizedDomain = normalizeDomain(contact.domena_fen);
+      payload.properties.domena_fen = normalizedDomain;
+      console.log(`[HubSpot] Adding domain (domena_fen) to new contact: "${normalizedDomain}"`);
     }
 
     logHubspotRequest('addContactToHubSpot:create', { method: 'POST', url, payload });

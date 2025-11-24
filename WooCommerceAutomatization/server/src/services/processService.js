@@ -82,7 +82,8 @@ export async function processRowsBatch(rows, startIndex, endIndex, sheetName) {
         firstname: hubspotContact.firstname, 
         lastname: hubspotContact.lastname,
         phone: hubspotContact.phone,
-        mobilephone: hubspotContact.mobilephone
+        mobilephone: hubspotContact.mobilephone,
+        domena_fen: hubspotContact.domena_fen
       });
       
       // Ensure we have at least email, firstname, lastname from parsed data
