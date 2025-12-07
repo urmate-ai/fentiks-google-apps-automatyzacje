@@ -51,7 +51,7 @@ describe('RagRefresher.syncRagFromDrive', () => {
     vertexModule.checkOperationStatus.mockReturnValue({ done: true });
   });
 
-  it('wysyła tylko pierwszą partię importu i ustawia activeOperation przy operacjach asynchronicznych', () => {
+  it('przetwarza wszystkie partie, gdy operacje importu kończą się podczas wywołania', () => {
     const fileIds = Array.from({ length: 30 }, (_, index) => `file-${index + 1}`);
     driveModule.listAllFileIdsRecursively.mockReturnValue(fileIds);
     driveModule.readFileContents.mockImplementation(ids => ids.map(id => ({ id, content: `content-${id}` })));
@@ -61,19 +61,23 @@ describe('RagRefresher.syncRagFromDrive', () => {
       operationName: `import-${docs.length}`,
     }));
 
+    vertexModule.checkOperationStatus.mockReturnValue({ done: true });
+
     RagRefresher.syncRagFromDrive();
 
-    expect(vertexModule.importDocuments).toHaveBeenCalledTimes(1);
+    expect(vertexModule.importDocuments).toHaveBeenCalledTimes(2);
     expect(vertexModule.importDocuments).toHaveBeenNthCalledWith(
       1,
       expect.any(Object),
       fileIds.slice(0, 25).map(id => ({ id, content: `content-${id}` })),
     );
-
-    expect(propsMock.setProperty).toHaveBeenCalledWith(
-      configModule.CONFIG_KEYS.activeOperation,
-      JSON.stringify(['import-25']),
+    expect(vertexModule.importDocuments).toHaveBeenNthCalledWith(
+      2,
+      expect.any(Object),
+      fileIds.slice(25).map(id => ({ id, content: `content-${id}` })),
     );
+
+    expect(propsMock.setProperty).not.toHaveBeenCalledWith(configModule.CONFIG_KEYS.activeOperation, expect.anything());
   });
 
   it('dołącza operacje usuwania i importu do activeOperation', () => {
@@ -110,7 +114,24 @@ describe('RagRefresher.syncRagFromDrive', () => {
 
     expect(propsMock.setProperty).toHaveBeenCalledWith(
       configModule.CONFIG_KEYS.activeOperation,
-      JSON.stringify(['delete-op', 'import-op']),
+      JSON.stringify(['delete-op']),
+    );
+  });
+
+  it('zatrzymuje się po pierwszej partii, gdy operacja importu wciąż trwa', () => {
+    const fileIds = Array.from({ length: 30 }, (_, index) => `file-${index + 1}`);
+    driveModule.listAllFileIdsRecursively.mockReturnValue(fileIds);
+    driveModule.readFileContents.mockImplementation(ids => ids.map(id => ({ id, content: `content-${id}` })));
+
+    vertexModule.importDocuments.mockReturnValue({ success: true, operationName: 'import-op' });
+    vertexModule.checkOperationStatus.mockReturnValue({ done: false });
+
+    RagRefresher.syncRagFromDrive();
+
+    expect(vertexModule.importDocuments).toHaveBeenCalledTimes(1);
+    expect(propsMock.setProperty).toHaveBeenCalledWith(
+      configModule.CONFIG_KEYS.activeOperation,
+      JSON.stringify(['import-op']),
     );
   });
 });
