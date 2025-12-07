@@ -28,14 +28,38 @@ const Vertex = (() => {
     return `https://discoveryengine.googleapis.com/v1/${documentName}`;
   }
 
+  function parseJsonlContent(content) {
+    if (!content || typeof content !== 'string') {
+      return [];
+    }
+
+    const entries = [];
+    const lines = content.split(/\r?\n/);
+
+    lines.forEach(line => {
+      const trimmed = line.trim();
+      if (!trimmed) {
+        return;
+      }
+
+      try {
+        entries.push(JSON.parse(trimmed));
+      } catch (err) {
+        entries.push({ raw: trimmed, parseError: err.message });
+      }
+    });
+
+    return entries;
+  }
+
   function buildImportPayload(documents) {
     return {
       inlineSource: {
         documents: documents.map(doc => ({
           id: doc.id,
-          content: doc.content || '',
           structData: {
             driveId: doc.id,
+            entries: parseJsonlContent(doc.content),
           },
         })),
       },
@@ -179,6 +203,7 @@ const Vertex = (() => {
   return {
     buildImportUrl,
     buildImportPayload,
+    parseJsonlContent,
     importDocuments,
     checkOperationStatus,
     buildOperationStatusUrl,
