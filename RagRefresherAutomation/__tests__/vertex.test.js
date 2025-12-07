@@ -15,11 +15,9 @@ describe('Vertex.buildImportPayload', () => {
         documents: [
           {
             id: 'file-1',
-            content: {
-              structData: {
-                driveId: 'file-1',
-                entries: [{ a: 1 }, { b: 2 }],
-              },
+            structData: {
+              driveId: 'file-1',
+              entries: [{ a: 1 }, { b: 2 }],
             },
           },
         ],
@@ -36,7 +34,7 @@ describe('Vertex.buildImportPayload', () => {
     ];
 
     const payload = Vertex.buildImportPayload(documents);
-    expect(payload.inlineSource.documents[0].content.structData.entries).toEqual([
+    expect(payload.inlineSource.documents[0].structData.entries).toEqual([
       { ok: true },
       expect.objectContaining({ raw: 'not-json', parseError: expect.any(String) }),
     ]);
@@ -48,6 +46,6 @@ describe('Vertex.buildImportPayload', () => {
     ];
 
     const payload = Vertex.buildImportPayload(documents);
-    expect(payload.inlineSource.documents[0].content.structData.entries).toEqual([]);
+    expect(payload.inlineSource.documents[0].structData.entries).toEqual([]);
   });
 });
