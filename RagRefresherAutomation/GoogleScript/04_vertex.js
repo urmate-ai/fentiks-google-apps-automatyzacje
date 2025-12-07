@@ -8,7 +8,7 @@ const Vertex = (() => {
   }
 
   function buildDocumentsBaseUrl(config) {
-    // Dla unstructured data używamy branches/0 zamiast default_branch
+    // For unstructured data we use branches/0 instead of default_branch
     return `${buildDataStoreBaseUrl(config)}/branches/0/documents`;
   }
 
@@ -58,14 +58,14 @@ const Vertex = (() => {
       inlineSource: {
         documents: documents.map(doc => {
           const entries = parseJsonlContent(doc.content);
-          // Dla unstructured data wymagane jest pole 'content' z tekstem do indeksowania
-          // Konwertujemy wpisy JSONL na tekst czytelny dla wyszukiwania
+          // For unstructured data, 'content' field with text for indexing is required
+          // Convert JSONL entries to searchable text
           const contentText = entries
             .map(entry => {
               if (entry.raw) {
                 return entry.raw;
               }
-              // Wyciągamy tekstowe pola z każdego wpisu dla lepszego indeksowania
+              // Extract text fields from each entry for better indexing
               const textParts = [];
               if (entry.content && entry.content.body_text) {
                 textParts.push(entry.content.body_text);
@@ -88,7 +88,7 @@ const Vertex = (() => {
                   textParts.push(parts.join(' | '));
                 }
               }
-              // Jeśli nie ma struktury, użyj JSON jako tekstu
+              // If there's no structure, use JSON as text
               if (textParts.length === 0) {
                 try {
                   return JSON.stringify(entry);
@@ -105,11 +105,11 @@ const Vertex = (() => {
             id: doc.id,
           };
           
-          // Dla unstructured data, dokument musi mieć pole 'content' z tekstem
-          // Vertex AI Search wymaga content.rawBytes (base64) z mimeType dla unstructured text
+          // For unstructured data, document must have 'content' field with text
+          // Vertex AI Search requires content.rawBytes (base64) with mimeType for unstructured text
           if (contentText) {
-            // Konwertujemy tekst na base64 - w Apps Script używamy Utilities.base64Encode
-            // W Node.js używamy btoa jako fallback
+            // Convert text to base64 - in Apps Script we use Utilities.base64Encode
+            // In Node.js we use btoa as fallback
             let base64;
             try {
               if (typeof Utilities !== 'undefined' && Utilities.base64Encode) {
@@ -117,8 +117,8 @@ const Vertex = (() => {
               } else if (typeof btoa !== 'undefined') {
                 base64 = btoa(contentText);
               } else {
-                // Ostatnia deska ratunku - próbujemy ręcznie zakodować base64
-                // W Apps Script zawsze powinno być Utilities dostępne
+                // Last resort - try to manually encode base64
+                // In Apps Script Utilities should always be available
                 throw new Error('No base64 encoder available');
               }
               
@@ -127,24 +127,24 @@ const Vertex = (() => {
                 rawBytes: base64,
               };
             } catch (e) {
-              // Jeśli nie możemy zakodować base64, logujemy błąd i używamy structData
-              // W praktyce w Apps Script Utilities zawsze jest dostępne
+              // If we can't encode base64, log error and use structData
+              // In practice, Utilities should always be available in Apps Script
               console.warn('Błąd kodowania base64:', e.message);
-              // Nie dodajemy content, ale zachowujemy structData
+              // Don't add content, but keep structData
             }
           }
           
-          // Dodajemy również structData dla metadanych i strukturalnych danych
-          // To pomaga w filtrowaniu i wyszukiwaniu po driveId
+          // Also add structData for metadata and structured data
+          // This helps with filtering and searching by driveId
           documentObj.structData = {
             driveId: doc.id,
             entries: entries,
           };
           
-          // Jeśli nie udało się dodać content, używamy tylko structData (może nie zadziałać dla unstructured)
-          // W takim przypadku dokument może nie zostać zaimportowany poprawnie
+          // If we couldn't add content, use only structData (may not work for unstructured)
+          // In this case the document may not be imported correctly
           if (!documentObj.content && contentText) {
-            // Próbujemy dodać content jako string bezpośrednio (niektóre API to akceptują)
+            // Try to add content as string directly (some APIs accept this)
             documentObj.content = contentText;
           }
           

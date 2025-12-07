@@ -300,10 +300,10 @@ const RagRefresher = (() => {
         logInfo(`${importLabel} rozpoczęty: ${importResult.operationName || 'synchronous'}`);
 
         if (importResult.operationName) {
-          // Zapisz operację do śledzenia - nie czekamy na zakończenie, żeby móc przetworzyć kolejne partie
+          // Save operation for tracking - we don't wait for completion to process next batches
           newOperations.push(importResult.operationName);
           
-          // Sprawdź szybko status (bez długiego oczekiwania) - jeśli już zakończona, zaloguj
+          // Check status quickly (without long wait) - if already completed, log it
           const quickStatus = checkOperationStatus ? checkOperationStatus(config, importResult.operationName) : { done: false };
           if (quickStatus.done) {
             if (quickStatus.error) {
@@ -311,7 +311,7 @@ const RagRefresher = (() => {
             } else {
               logInfo(`${importLabel} zakończony.`);
             }
-            // Usuń z listy operacji w toku, jeśli już zakończona
+            // Remove from active operations list if already completed
             const opIndex = newOperations.indexOf(importResult.operationName);
             if (opIndex >= 0) {
               newOperations.splice(opIndex, 1);
@@ -320,7 +320,7 @@ const RagRefresher = (() => {
             logInfo(`Operacja importu partii ${index + 1}/${batches.length} jest w toku - status zostanie sprawdzony w kolejnym uruchomieniu.`);
           }
           
-          // Krótkie opóźnienie przed kolejną partią, aby nie przeciążać API
+          // Short delay before next batch to avoid overloading the API
           if (index < batches.length - 1) {
             sleepMs(1000);
           }
