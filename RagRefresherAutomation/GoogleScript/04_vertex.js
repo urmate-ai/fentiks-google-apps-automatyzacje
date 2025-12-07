@@ -57,9 +57,11 @@ const Vertex = (() => {
       inlineSource: {
         documents: documents.map(doc => ({
           id: doc.id,
-          structData: {
-            driveId: doc.id,
-            entries: parseJsonlContent(doc.content),
+          content: {
+            structData: {
+              driveId: doc.id,
+              entries: parseJsonlContent(doc.content),
+            },
           },
         })),
       },
