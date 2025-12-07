@@ -1,18 +1,28 @@
 const Vertex = (() => {
-  function buildRagFilesBaseUrl(config) {
+  const DEFAULT_BRANCH = 'default_branch';
+
+  function buildDiscoveryHost(location) {
+    if (!location || location.trim() === 'global') {
+      return 'https://discoveryengine.googleapis.com';
+    }
+
+    return `https://${encodeURIComponent(location)}-discoveryengine.googleapis.com`;
+  }
+
+  function buildDocumentsBaseUrl(config) {
     const encodedProject = encodeURIComponent(config.projectId);
     const encodedLocation = encodeURIComponent(config.location);
-    const encodedCorpus = encodeURIComponent(config.corpusId);
+    const encodedDataStore = encodeURIComponent(config.dataStoreId);
 
-    return `https://${config.location}-aiplatform.googleapis.com/v1/projects/${encodedProject}/locations/${encodedLocation}/ragCorpora/${encodedCorpus}/ragFiles`;
+    return `${buildDiscoveryHost(config.location)}/v1/projects/${encodedProject}/locations/${encodedLocation}/collections/default_collection/dataStores/${encodedDataStore}/branches/${DEFAULT_BRANCH}/documents`;
   }
 
   function buildImportUrl(config) {
-    return `${buildRagFilesBaseUrl(config)}:import`;
+    return `${buildDocumentsBaseUrl(config)}:import`;
   }
 
   function buildListUrl(config, pageToken) {
-    const base = buildRagFilesBaseUrl(config);
+    const base = buildDocumentsBaseUrl(config);
     if (!pageToken) {
       return base;
     }
@@ -20,28 +30,27 @@ const Vertex = (() => {
     return `${base}?pageToken=${encodeURIComponent(pageToken)}`;
   }
 
-  function buildDeleteUrl(config, ragFileName) {
-    return `https://${config.location}-aiplatform.googleapis.com/v1/${ragFileName}`;
+  function buildDeleteUrl(config, documentName) {
+      if (documentName && documentName.startsWith('projects/')) {
+        return `${buildDiscoveryHost(config.location)}/v1/${documentName}`;
+      }
+
+    return `${buildDocumentsBaseUrl(config)}/${encodeURIComponent(documentName)}`;
   }
 
-  function buildImportPayload(resourceIds) {
-    return {
-      importRagFilesConfig: {
-        googleDriveSource: {
-          resourceIds,
-        },
+  function buildImportPayload(fileIds) {
+    const documents = fileIds.map(id => ({
+      id,
+      structData: { driveId: id },
+      content: {
+        uri: `https://drive.google.com/uc?id=${encodeURIComponent(id)}&export=download`,
       },
-    };
-  }
-
-  function buildResourceIds(fileIds) {
-    return fileIds.map(id => ({
-      resourceType: 'RESOURCE_TYPE_FILE',
-      resourceId: id,
     }));
+
+    return { inlineSource: { documents } };
   }
 
-  function importRagFiles(config, fileIds, urlFetchApp, scriptApp) {
+  function importDocuments(config, fileIds, urlFetchApp, scriptApp) {
     if (!fileIds.length) {
       return { success: false, code: 400, body: 'No files to import.' };
     }
@@ -50,8 +59,7 @@ const Vertex = (() => {
     const script = scriptApp || ScriptApp;
 
     const url = buildImportUrl(config);
-    const resourceIds = buildResourceIds(fileIds);
-    const payload = buildImportPayload(resourceIds);
+    const payload = buildImportPayload(fileIds);
     const token = script.getOAuthToken();
 
     const response = fetcher.fetch(url, {
@@ -66,19 +74,25 @@ const Vertex = (() => {
     const body = response.getContentText();
 
     if (code >= 200 && code < 300) {
-      const parsed = JSON.parse(body);
+      let parsed;
+      try {
+        parsed = JSON.parse(body);
+      } catch (err) {
+        return { success: false, code, body: `Invalid JSON: ${err.message}` };
+      }
+
       return { success: true, code, body, operationName: parsed.name };
     }
 
     return { success: false, code, body };
   }
 
-  function listRagFiles(config, urlFetchApp, scriptApp) {
+  function listDocuments(config, urlFetchApp, scriptApp) {
     const fetcher = urlFetchApp || UrlFetchApp;
     const script = scriptApp || ScriptApp;
 
     const token = script.getOAuthToken();
-    const ragFiles = [];
+    const documents = [];
     let pageToken = '';
     let lastResponseCode = 0;
     let lastBody = '';
@@ -105,24 +119,23 @@ const Vertex = (() => {
         return { success: false, code: lastResponseCode, body: `Invalid JSON: ${err.message}` };
       }
 
-      if (Array.isArray(parsed.ragFiles)) {
-        ragFiles.push(...parsed.ragFiles);
+      if (Array.isArray(parsed.documents)) {
+        documents.push(...parsed.documents);
       }
 
       pageToken = parsed.nextPageToken || '';
     } while (pageToken);
 
-    return { success: true, code: lastResponseCode || 200, ragFiles };
+    return { success: true, code: lastResponseCode || 200, documents };
   }
 
-  function deleteRagFile(config, ragFileName, urlFetchApp, scriptApp, options = {}) {
+  function deleteDocument(config, documentName, urlFetchApp, scriptApp) {
     const fetcher = urlFetchApp || UrlFetchApp;
     const script = scriptApp || ScriptApp;
-    const url = buildDeleteUrl(config, ragFileName);
+    const url = buildDeleteUrl(config, documentName);
     const token = script.getOAuthToken();
 
-    const query = options.forceDelete ? '?forceDelete=true' : '';
-    const response = fetcher.fetch(`${url}${query}`, {
+    const response = fetcher.fetch(url, {
       method: 'delete',
       headers: { Authorization: `Bearer ${token}` },
       muteHttpExceptions: true,
@@ -132,21 +145,23 @@ const Vertex = (() => {
     const body = response.getContentText();
 
     if (code >= 200 && code < 300) {
-      let parsed;
+      if (!body) {
+        return { success: true, code, body: '' };
+      }
+
       try {
-        parsed = JSON.parse(body);
+        const parsed = JSON.parse(body);
+        return { success: true, code, body, operationName: parsed.name };
       } catch (err) {
         return { success: false, code, body: `Invalid JSON: ${err.message}` };
       }
-
-      return { success: true, code, body, operationName: parsed.name };
     }
 
     return { success: false, code, body };
   }
 
   function buildOperationStatusUrl(config, operationName) {
-    return `https://${config.location}-aiplatform.googleapis.com/v1/${operationName}`;
+    return `${buildDiscoveryHost(config.location)}/v1/${operationName}`;
   }
 
   function checkOperationStatus(config, operationName, urlFetchApp, scriptApp) {
@@ -180,15 +195,15 @@ const Vertex = (() => {
   return {
     buildImportUrl,
     buildImportPayload,
-    buildResourceIds,
-    importRagFiles,
+    importDocuments,
     checkOperationStatus,
     buildOperationStatusUrl,
     buildListUrl,
-    listRagFiles,
+    listDocuments,
     buildDeleteUrl,
-    deleteRagFile,
-    buildRagFilesBaseUrl,
+    deleteDocument,
+    buildDiscoveryHost,
+    buildDocumentsBaseUrl,
   };
 })();
 
