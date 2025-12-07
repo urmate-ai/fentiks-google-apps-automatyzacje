@@ -9,9 +9,9 @@ jest.mock('../GoogleScript/03_drive', () => ({
 }));
 
 jest.mock('../GoogleScript/04_vertex', () => ({
-  listRagFiles: jest.fn(),
-  deleteRagFile: jest.fn(),
-  importRagFiles: jest.fn(),
+  listDocuments: jest.fn(),
+  deleteDocument: jest.fn(),
+  importDocuments: jest.fn(),
   checkOperationStatus: jest.fn(),
 }));
 
@@ -35,7 +35,7 @@ describe('RagRefresher.syncRagFromDrive', () => {
 
     configModule.getConfig.mockReturnValue({
       projectId: 'project',
-      corpusId: 'corpus',
+      dataStoreId: 'datastore',
       rootFolderId: 'root-folder',
       location: 'europe-west3',
     });
@@ -43,9 +43,9 @@ describe('RagRefresher.syncRagFromDrive', () => {
 
     driveModule.listAllFileIdsRecursively.mockReturnValue([]);
 
-    vertexModule.listRagFiles.mockReturnValue({ success: true, ragFiles: [] });
-    vertexModule.deleteRagFile.mockReturnValue({ success: true, operationName: 'delete-op' });
-    vertexModule.importRagFiles.mockReturnValue({ success: true, operationName: 'import-op' });
+    vertexModule.listDocuments.mockReturnValue({ success: true, documents: [] });
+    vertexModule.deleteDocument.mockReturnValue({ success: true, operationName: 'delete-op' });
+    vertexModule.importDocuments.mockReturnValue({ success: true, operationName: 'import-op' });
     vertexModule.checkOperationStatus.mockReturnValue({ done: true });
   });
 
@@ -53,15 +53,15 @@ describe('RagRefresher.syncRagFromDrive', () => {
     const fileIds = Array.from({ length: 30 }, (_, index) => `file-${index + 1}`);
     driveModule.listAllFileIdsRecursively.mockReturnValue(fileIds);
 
-    vertexModule.importRagFiles.mockImplementation((_, ids) => ({
+    vertexModule.importDocuments.mockImplementation((_, ids) => ({
       success: true,
       operationName: `import-${ids.length}`,
     }));
 
     RagRefresher.syncRagFromDrive();
 
-    expect(vertexModule.importRagFiles).toHaveBeenCalledTimes(1);
-    expect(vertexModule.importRagFiles).toHaveBeenNthCalledWith(
+    expect(vertexModule.importDocuments).toHaveBeenCalledTimes(1);
+    expect(vertexModule.importDocuments).toHaveBeenNthCalledWith(
       1,
       expect.any(Object),
       fileIds.slice(0, 25),
@@ -77,40 +77,32 @@ describe('RagRefresher.syncRagFromDrive', () => {
     const driveFiles = ['drive-1', 'drive-2'];
     driveModule.listAllFileIdsRecursively.mockReturnValue(driveFiles);
 
-    vertexModule.listRagFiles.mockReturnValue({
+    vertexModule.listDocuments.mockReturnValue({
       success: true,
-      ragFiles: [
+      documents: [
         {
           name: 'rag-old-1',
           createTime: '2023-01-01T00:00:00Z',
-          googleDriveSource: {
-            resourceIds: [
-              { resourceType: 'RESOURCE_TYPE_FILE', resourceId: 'drive-1' },
-            ],
-          },
+          structData: { driveId: 'drive-1' },
         },
         {
           name: 'rag-old-2',
           createTime: '2023-01-02T00:00:00Z',
-          googleDriveSource: {
-            resourceIds: [
-              { resourceType: 'RESOURCE_TYPE_FILE', resourceId: 'drive-1' },
-            ],
-          },
+          structData: { driveId: 'drive-1' },
         },
       ],
     });
 
-    vertexModule.deleteRagFile.mockReturnValue({ success: true, operationName: 'delete-op' });
-    vertexModule.importRagFiles.mockReturnValue({ success: true, operationName: 'import-op' });
+    vertexModule.deleteDocument.mockReturnValue({ success: true, operationName: 'delete-op' });
+    vertexModule.importDocuments.mockReturnValue({ success: true, operationName: 'import-op' });
 
     RagRefresher.syncRagFromDrive();
 
-    expect(vertexModule.deleteRagFile).toHaveBeenCalledWith(
+    expect(vertexModule.deleteDocument).toHaveBeenCalledWith(
       expect.any(Object),
       'rag-old-1',
     );
-    expect(vertexModule.importRagFiles).toHaveBeenCalledTimes(1);
+    expect(vertexModule.importDocuments).toHaveBeenCalledTimes(1);
 
     expect(propsMock.setProperty).toHaveBeenCalledWith(
       configModule.CONFIG_KEYS.activeOperation,

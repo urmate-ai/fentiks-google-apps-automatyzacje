@@ -15,7 +15,10 @@ const CFG = (() => {
   }
 
   const vertex = (() => {
-    const rag = get("VERTEX_RAG_CORPORA", get("VERTEX_RAG_CORPUS", ""));
+    const searchDataStore = get(
+      "VERTEX_SEARCH_DATA_STORE",
+      get("VERTEX_SEARCH_DATASTORE", get("VERTEX_RAG_CORPORA", get("VERTEX_RAG_CORPUS", "")))
+    );
     return {
       PROJECT_ID: get("VERTEX_PROJECT_ID"),
       LOCATION: get("VERTEX_LOCATION", "europe-west3"),
@@ -23,8 +26,7 @@ const CFG = (() => {
       MODEL: get("VERTEX_MODEL", get("GEMINI_MODEL", "gemini-2.5-flash")),
       ENDPOINT: get("VERTEX_ENDPOINT"),
       ACCESS_TOKEN: get("VERTEX_ACCESS_TOKEN"),
-      RAG_CORPORA: rag,
-      RAG_CORPUS: rag
+      SEARCH_DATA_STORE: searchDataStore
     };
   })();
 

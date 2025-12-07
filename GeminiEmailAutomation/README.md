@@ -1,6 +1,6 @@
 # GeminiEmailAutomation
 
-Projekt automatyzuje przygotowywanie odpowiedzi e-mailowych dla Fentix przy użyciu Google Apps Script oraz modeli Gemini. Kontekst merytoryczny jest dostarczany przez korpus Vertex AI RAG, dzięki czemu lokalna baza wiedzy nie jest potrzebna. Kod źródłowy znajduje się w tym katalogu.
+Projekt automatyzuje przygotowywanie odpowiedzi e-mailowych dla Fentix przy użyciu Google Apps Script oraz modeli Gemini. Kontekst merytoryczny jest dostarczany przez Vertex AI Search (data store), dzięki czemu lokalna baza wiedzy nie jest potrzebna. Kod źródłowy znajduje się w tym katalogu.
 
 ## Wymagania
 
@@ -15,7 +15,7 @@ npm install
 
 ## Uruchamianie skryptu
 
-1. Uzupełnij plik `GoogleScripts/01_config.js`, aby zdefiniować nazwy etykiet Gmail, konfigurację Vertex AI (np. `VERTEX_PROJECT_ID`, `VERTEX_LOCATION`, `VERTEX_MODEL`, `VERTEX_RAG_CORPUS`) oraz podpisy wiadomości. W razie potrzeby można pozostawić legacy `GEMINI_API_KEY` do testów.
+1. Uzupełnij plik `GoogleScripts/01_config.js`, aby zdefiniować nazwy etykiet Gmail, konfigurację Vertex AI (np. `VERTEX_PROJECT_ID`, `VERTEX_LOCATION`, `VERTEX_MODEL`, `VERTEX_SEARCH_DATA_STORE`) oraz podpisy wiadomości. W razie potrzeby można pozostawić legacy `GEMINI_API_KEY` do testów.
 2. W ustawieniach Apps Script możesz opcjonalnie dodać właściwości skryptu:
    - `SLACK_WEBHOOK_URL` – aby otrzymywać powiadomienia o błędach na Slacku.
    - `GEMINI_EMAIL_LOG_LEVEL` – aby sterować poziomem logów (`Error`, `Warning`, `Information`, `Debug`, `None`). Ustaw `Debug`, aby zobaczyć pełne payloady wysyłane do Gemini wraz z docelowym adresem endpointu.
