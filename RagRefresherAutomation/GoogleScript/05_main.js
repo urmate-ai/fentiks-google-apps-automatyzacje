@@ -300,19 +300,29 @@ const RagRefresher = (() => {
         logInfo(`${importLabel} rozpoczęty: ${importResult.operationName || 'synchronous'}`);
 
         if (importResult.operationName) {
-          const status = waitForOperationCompletion(config, importResult.operationName);
-
-          if (!status.done) {
-            newOperations.push(importResult.operationName);
-            updateActiveOperations();
-            logInfo('Oczekiwanie na zakończenie bieżącej operacji importu przed uruchomieniem kolejnych partii.');
-            return;
-          }
-
-          if (status.error) {
-            logError(`${importLabel} zakończony z błędem: ${status.error}`);
+          // Zapisz operację do śledzenia - nie czekamy na zakończenie, żeby móc przetworzyć kolejne partie
+          newOperations.push(importResult.operationName);
+          
+          // Sprawdź szybko status (bez długiego oczekiwania) - jeśli już zakończona, zaloguj
+          const quickStatus = checkOperationStatus ? checkOperationStatus(config, importResult.operationName) : { done: false };
+          if (quickStatus.done) {
+            if (quickStatus.error) {
+              logError(`${importLabel} zakończony z błędem: ${quickStatus.error}`);
+            } else {
+              logInfo(`${importLabel} zakończony.`);
+            }
+            // Usuń z listy operacji w toku, jeśli już zakończona
+            const opIndex = newOperations.indexOf(importResult.operationName);
+            if (opIndex >= 0) {
+              newOperations.splice(opIndex, 1);
+            }
           } else {
-            logInfo(`${importLabel} zakończony.`);
+            logInfo(`Operacja importu partii ${index + 1}/${batches.length} jest w toku - status zostanie sprawdzony w kolejnym uruchomieniu.`);
+          }
+          
+          // Krótkie opóźnienie przed kolejną partią, aby nie przeciążać API
+          if (index < batches.length - 1) {
+            sleepMs(1000);
           }
         }
       }
