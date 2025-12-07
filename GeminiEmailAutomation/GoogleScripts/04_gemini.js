@@ -53,19 +53,16 @@ const Gemini = (() => {
 
   function buildVertexTools_(cfg) {
     const vertex = cfg.VERTEX || {};
-    const ragRaw = vertex.RAG_CORPORA || vertex.RAG_CORPUS;
-    if (!ragRaw) return undefined;
-    const ragList = ragRaw
-      .split(/[,\n]/)
+    const searchRaw = vertex.SEARCH_DATA_STORES || vertex.SEARCH_DATA_STORE;
+    if (!searchRaw) return undefined;
+    const dataStores = searchRaw
+      .split(/[\,\n]/)
       .map(s => s.trim())
-      .filter(Boolean)
-      .map(rag_corpus => ({ rag_corpus }));
-    if (!ragList.length) return undefined;
+      .filter(Boolean);
+    if (!dataStores.length) return undefined;
     return [{
-      retrieval: {
-        vertex_rag_store: {
-          rag_resources: ragList
-        }
+      vertexAiSearch: {
+        dataStore: dataStores[0]
       }
     }];
   }

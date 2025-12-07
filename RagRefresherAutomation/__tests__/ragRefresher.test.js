@@ -6,12 +6,13 @@ jest.mock('../GoogleScript/01_config', () => ({
 
 jest.mock('../GoogleScript/03_drive', () => ({
   listAllFileIdsRecursively: jest.fn(),
+  readFileContents: jest.fn(),
 }));
 
 jest.mock('../GoogleScript/04_vertex', () => ({
-  listRagFiles: jest.fn(),
-  deleteRagFile: jest.fn(),
-  importRagFiles: jest.fn(),
+  listDocuments: jest.fn(),
+  deleteDocument: jest.fn(),
+  importDocuments: jest.fn(),
   checkOperationStatus: jest.fn(),
 }));
 
@@ -35,36 +36,38 @@ describe('RagRefresher.syncRagFromDrive', () => {
 
     configModule.getConfig.mockReturnValue({
       projectId: 'project',
-      corpusId: 'corpus',
+      dataStoreId: 'datastore',
       rootFolderId: 'root-folder',
       location: 'europe-west3',
     });
     configModule.resolveProperties.mockReturnValue(propsMock);
 
     driveModule.listAllFileIdsRecursively.mockReturnValue([]);
+    driveModule.readFileContents.mockReturnValue([]);
 
-    vertexModule.listRagFiles.mockReturnValue({ success: true, ragFiles: [] });
-    vertexModule.deleteRagFile.mockReturnValue({ success: true, operationName: 'delete-op' });
-    vertexModule.importRagFiles.mockReturnValue({ success: true, operationName: 'import-op' });
+    vertexModule.listDocuments.mockReturnValue({ success: true, documents: [] });
+    vertexModule.deleteDocument.mockReturnValue({ success: true, operationName: 'delete-op' });
+    vertexModule.importDocuments.mockReturnValue({ success: true, operationName: 'import-op' });
     vertexModule.checkOperationStatus.mockReturnValue({ done: true });
   });
 
-  it('wysyła tylko pierwszą partię importu i ustawia activeOperation', () => {
+  it('wysyła tylko pierwszą partię importu i ustawia activeOperation przy operacjach asynchronicznych', () => {
     const fileIds = Array.from({ length: 30 }, (_, index) => `file-${index + 1}`);
     driveModule.listAllFileIdsRecursively.mockReturnValue(fileIds);
+    driveModule.readFileContents.mockImplementation(ids => ids.map(id => ({ id, content: `content-${id}` })));
 
-    vertexModule.importRagFiles.mockImplementation((_, ids) => ({
+    vertexModule.importDocuments.mockImplementation((_, docs) => ({
       success: true,
-      operationName: `import-${ids.length}`,
+      operationName: `import-${docs.length}`,
     }));
 
     RagRefresher.syncRagFromDrive();
 
-    expect(vertexModule.importRagFiles).toHaveBeenCalledTimes(1);
-    expect(vertexModule.importRagFiles).toHaveBeenNthCalledWith(
+    expect(vertexModule.importDocuments).toHaveBeenCalledTimes(1);
+    expect(vertexModule.importDocuments).toHaveBeenNthCalledWith(
       1,
       expect.any(Object),
-      fileIds.slice(0, 25),
+      fileIds.slice(0, 25).map(id => ({ id, content: `content-${id}` })),
     );
 
     expect(propsMock.setProperty).toHaveBeenCalledWith(
@@ -77,40 +80,33 @@ describe('RagRefresher.syncRagFromDrive', () => {
     const driveFiles = ['drive-1', 'drive-2'];
     driveModule.listAllFileIdsRecursively.mockReturnValue(driveFiles);
 
-    vertexModule.listRagFiles.mockReturnValue({
+    vertexModule.listDocuments.mockReturnValue({
       success: true,
-      ragFiles: [
+      documents: [
         {
-          name: 'rag-old-1',
+          name: 'projects/p/locations/l/collections/default_collection/dataStores/ds/branches/default_branch/documents/drive-1',
+          id: 'drive-1',
           createTime: '2023-01-01T00:00:00Z',
-          googleDriveSource: {
-            resourceIds: [
-              { resourceType: 'RESOURCE_TYPE_FILE', resourceId: 'drive-1' },
-            ],
-          },
         },
         {
-          name: 'rag-old-2',
+          name: 'projects/p/locations/l/collections/default_collection/dataStores/ds/branches/default_branch/documents/drive-1-dup',
+          id: 'drive-1',
           createTime: '2023-01-02T00:00:00Z',
-          googleDriveSource: {
-            resourceIds: [
-              { resourceType: 'RESOURCE_TYPE_FILE', resourceId: 'drive-1' },
-            ],
-          },
         },
       ],
     });
 
-    vertexModule.deleteRagFile.mockReturnValue({ success: true, operationName: 'delete-op' });
-    vertexModule.importRagFiles.mockReturnValue({ success: true, operationName: 'import-op' });
+    vertexModule.deleteDocument.mockReturnValue({ success: true, operationName: 'delete-op' });
+    vertexModule.importDocuments.mockReturnValue({ success: true, operationName: 'import-op' });
+    driveModule.readFileContents.mockReturnValue([{ id: 'drive-2', content: 'content-drive-2' }]);
 
     RagRefresher.syncRagFromDrive();
 
-    expect(vertexModule.deleteRagFile).toHaveBeenCalledWith(
+    expect(vertexModule.deleteDocument).toHaveBeenCalledWith(
       expect.any(Object),
-      'rag-old-1',
+      'projects/p/locations/l/collections/default_collection/dataStores/ds/branches/default_branch/documents/drive-1',
     );
-    expect(vertexModule.importRagFiles).toHaveBeenCalledTimes(1);
+    expect(vertexModule.importDocuments).toHaveBeenCalledTimes(1);
 
     expect(propsMock.setProperty).toHaveBeenCalledWith(
       configModule.CONFIG_KEYS.activeOperation,

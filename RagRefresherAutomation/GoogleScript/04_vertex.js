@@ -1,18 +1,22 @@
 const Vertex = (() => {
-  function buildRagFilesBaseUrl(config) {
+  function buildDataStoreBaseUrl(config) {
     const encodedProject = encodeURIComponent(config.projectId);
     const encodedLocation = encodeURIComponent(config.location);
-    const encodedCorpus = encodeURIComponent(config.corpusId);
+    const encodedDataStore = encodeURIComponent(config.dataStoreId);
 
-    return `https://${config.location}-aiplatform.googleapis.com/v1/projects/${encodedProject}/locations/${encodedLocation}/ragCorpora/${encodedCorpus}/ragFiles`;
+    return `https://discoveryengine.googleapis.com/v1/projects/${encodedProject}/locations/${encodedLocation}/collections/default_collection/dataStores/${encodedDataStore}`;
+  }
+
+  function buildDocumentsBaseUrl(config) {
+    return `${buildDataStoreBaseUrl(config)}/branches/default_branch/documents`;
   }
 
   function buildImportUrl(config) {
-    return `${buildRagFilesBaseUrl(config)}:import`;
+    return `${buildDocumentsBaseUrl(config)}:import`;
   }
 
   function buildListUrl(config, pageToken) {
-    const base = buildRagFilesBaseUrl(config);
+    const base = buildDocumentsBaseUrl(config);
     if (!pageToken) {
       return base;
     }
@@ -20,38 +24,34 @@ const Vertex = (() => {
     return `${base}?pageToken=${encodeURIComponent(pageToken)}`;
   }
 
-  function buildDeleteUrl(config, ragFileName) {
-    return `https://${config.location}-aiplatform.googleapis.com/v1/${ragFileName}`;
+  function buildDeleteUrl(_, documentName) {
+    return `https://discoveryengine.googleapis.com/v1/${documentName}`;
   }
 
-  function buildImportPayload(resourceIds) {
+  function buildImportPayload(documents) {
     return {
-      importRagFilesConfig: {
-        googleDriveSource: {
-          resourceIds,
-        },
+      inlineSource: {
+        documents: documents.map(doc => ({
+          id: doc.id,
+          content: doc.content || '',
+          structData: {
+            driveId: doc.id,
+          },
+        })),
       },
     };
   }
 
-  function buildResourceIds(fileIds) {
-    return fileIds.map(id => ({
-      resourceType: 'RESOURCE_TYPE_FILE',
-      resourceId: id,
-    }));
-  }
-
-  function importRagFiles(config, fileIds, urlFetchApp, scriptApp) {
-    if (!fileIds.length) {
-      return { success: false, code: 400, body: 'No files to import.' };
+  function importDocuments(config, documents, urlFetchApp, scriptApp) {
+    if (!documents.length) {
+      return { success: false, code: 400, body: 'No documents to import.' };
     }
 
     const fetcher = urlFetchApp || UrlFetchApp;
     const script = scriptApp || ScriptApp;
 
     const url = buildImportUrl(config);
-    const resourceIds = buildResourceIds(fileIds);
-    const payload = buildImportPayload(resourceIds);
+    const payload = buildImportPayload(documents);
     const token = script.getOAuthToken();
 
     const response = fetcher.fetch(url, {
@@ -73,12 +73,12 @@ const Vertex = (() => {
     return { success: false, code, body };
   }
 
-  function listRagFiles(config, urlFetchApp, scriptApp) {
+  function listDocuments(config, urlFetchApp, scriptApp) {
     const fetcher = urlFetchApp || UrlFetchApp;
     const script = scriptApp || ScriptApp;
 
     const token = script.getOAuthToken();
-    const ragFiles = [];
+    const documents = [];
     let pageToken = '';
     let lastResponseCode = 0;
     let lastBody = '';
@@ -105,24 +105,23 @@ const Vertex = (() => {
         return { success: false, code: lastResponseCode, body: `Invalid JSON: ${err.message}` };
       }
 
-      if (Array.isArray(parsed.ragFiles)) {
-        ragFiles.push(...parsed.ragFiles);
+      if (Array.isArray(parsed.documents)) {
+        documents.push(...parsed.documents);
       }
 
       pageToken = parsed.nextPageToken || '';
     } while (pageToken);
 
-    return { success: true, code: lastResponseCode || 200, ragFiles };
+    return { success: true, code: lastResponseCode || 200, documents };
   }
 
-  function deleteRagFile(config, ragFileName, urlFetchApp, scriptApp, options = {}) {
+  function deleteDocument(config, documentName, urlFetchApp, scriptApp) {
     const fetcher = urlFetchApp || UrlFetchApp;
     const script = scriptApp || ScriptApp;
-    const url = buildDeleteUrl(config, ragFileName);
+    const url = buildDeleteUrl(config, documentName);
     const token = script.getOAuthToken();
 
-    const query = options.forceDelete ? '?forceDelete=true' : '';
-    const response = fetcher.fetch(`${url}${query}`, {
+    const response = fetcher.fetch(url, {
       method: 'delete',
       headers: { Authorization: `Bearer ${token}` },
       muteHttpExceptions: true,
@@ -145,15 +144,15 @@ const Vertex = (() => {
     return { success: false, code, body };
   }
 
-  function buildOperationStatusUrl(config, operationName) {
-    return `https://${config.location}-aiplatform.googleapis.com/v1/${operationName}`;
+  function buildOperationStatusUrl(operationName) {
+    return `https://discoveryengine.googleapis.com/v1/${operationName}`;
   }
 
-  function checkOperationStatus(config, operationName, urlFetchApp, scriptApp) {
+  function checkOperationStatus(_, operationName, urlFetchApp, scriptApp) {
     const fetcher = urlFetchApp || UrlFetchApp;
     const script = scriptApp || ScriptApp;
 
-    const url = buildOperationStatusUrl(config, operationName);
+    const url = buildOperationStatusUrl(operationName);
     const token = script.getOAuthToken();
     const response = fetcher.fetch(url, {
       method: 'get',
@@ -180,15 +179,15 @@ const Vertex = (() => {
   return {
     buildImportUrl,
     buildImportPayload,
-    buildResourceIds,
-    importRagFiles,
+    importDocuments,
     checkOperationStatus,
     buildOperationStatusUrl,
     buildListUrl,
-    listRagFiles,
+    listDocuments,
     buildDeleteUrl,
-    deleteRagFile,
-    buildRagFilesBaseUrl,
+    deleteDocument,
+    buildDataStoreBaseUrl,
+    buildDocumentsBaseUrl,
   };
 })();
 

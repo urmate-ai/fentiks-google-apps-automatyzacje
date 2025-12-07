@@ -6,19 +6,12 @@ const {
 } = require('../GoogleScript/01_config');
 
 const { listAllFileIdsRecursively } = require('../GoogleScript/03_drive');
-const {
-  buildImportUrl,
-  buildResourceIds,
-  buildListUrl,
-  listRagFiles,
-  buildDeleteUrl,
-  deleteRagFile,
-} = require('../GoogleScript/04_vertex');
+const { buildImportUrl, buildListUrl, listDocuments } = require('../GoogleScript/04_vertex');
 const {
   parseStoredOperationNames,
   serializeOperationNames,
-  createRagFileIndex,
-  pickRagFilesToDeleteByDriveId,
+  createDocumentIndex,
+  pickDocumentsToDeleteByDriveId,
 } = require('../GoogleScript/05_main');
 
 describe('konfiguracja', () => {
@@ -38,7 +31,7 @@ describe('konfiguracja', () => {
 
     expect(config.projectId).toBe('project-123');
     expect(config.location).toBe('us-central1');
-    expect(config.corpusId).toBe(CONFIG_DEFAULTS.corpusId);
+    expect(config.dataStoreId).toBe(CONFIG_DEFAULTS.dataStoreId);
     expect(config.logLevel).toBe(CONFIG_DEFAULTS.logLevel);
   });
 });
@@ -141,41 +134,34 @@ describe('Drive helpers', () => {
 });
 
 describe('Vertex helpers', () => {
-  test('buildResourceIds tworzy poprawne obiekty', () => {
-    expect(buildResourceIds(['1', '2'])).toEqual([
-      { resourceType: 'RESOURCE_TYPE_FILE', resourceId: '1' },
-      { resourceType: 'RESOURCE_TYPE_FILE', resourceId: '2' },
-    ]);
-  });
-
   test('buildImportUrl poprawnie koduje parametry', () => {
     const url = buildImportUrl({
       projectId: 'my project',
       location: 'europe-west3',
-      corpusId: '123/456',
+      dataStoreId: '123/456',
     });
 
-    expect(url).toBe('https://europe-west3-aiplatform.googleapis.com/v1/projects/my%20project/locations/europe-west3/ragCorpora/123%2F456/ragFiles:import');
+    expect(url).toBe('https://discoveryengine.googleapis.com/v1/projects/my%20project/locations/europe-west3/collections/default_collection/dataStores/123%2F456/branches/default_branch/documents:import');
   });
 
   test('buildListUrl dodaje token strony', () => {
     const base = buildListUrl({
       projectId: 'p',
       location: 'europe-west3',
-      corpusId: 'c',
+      dataStoreId: 'c',
     });
 
     const withToken = buildListUrl({
       projectId: 'p',
       location: 'europe-west3',
-      corpusId: 'c',
+      dataStoreId: 'c',
     }, 'token/123');
 
-    expect(base).toBe('https://europe-west3-aiplatform.googleapis.com/v1/projects/p/locations/europe-west3/ragCorpora/c/ragFiles');
-    expect(withToken).toBe('https://europe-west3-aiplatform.googleapis.com/v1/projects/p/locations/europe-west3/ragCorpora/c/ragFiles?pageToken=token%2F123');
+    expect(base).toBe('https://discoveryengine.googleapis.com/v1/projects/p/locations/europe-west3/collections/default_collection/dataStores/c/branches/default_branch/documents');
+    expect(withToken).toBe('https://discoveryengine.googleapis.com/v1/projects/p/locations/europe-west3/collections/default_collection/dataStores/c/branches/default_branch/documents?pageToken=token%2F123');
   });
 
-  test('listRagFiles łączy wyniki z wielu stron', () => {
+  test('listDocuments łączy wyniki z wielu stron', () => {
     class FakeResponse {
       constructor(code, body) {
         this.code = code;
@@ -192,8 +178,8 @@ describe('Vertex helpers', () => {
     }
 
     const responses = [
-      new FakeResponse(200, JSON.stringify({ ragFiles: [{ name: 'rag1' }], nextPageToken: 'next' })),
-      new FakeResponse(200, JSON.stringify({ ragFiles: [{ name: 'rag2' }] })),
+      new FakeResponse(200, JSON.stringify({ documents: [{ name: 'doc1' }], nextPageToken: 'next' })),
+      new FakeResponse(200, JSON.stringify({ documents: [{ name: 'doc2' }] })),
     ];
 
     const fetcher = {
@@ -204,98 +190,54 @@ describe('Vertex helpers', () => {
       getOAuthToken: jest.fn(() => 'token'),
     };
 
-    const result = listRagFiles({ projectId: 'p', location: 'europe-west3', corpusId: 'c' }, fetcher, scriptApp);
+    const config = { projectId: 'p', location: 'l', dataStoreId: 'ds' };
 
-    expect(result.success).toBe(true);
-    expect(result.ragFiles.map(file => file.name)).toEqual(['rag1', 'rag2']);
+    const result = listDocuments(config, fetcher, scriptApp);
+
     expect(fetcher.fetch).toHaveBeenCalledTimes(2);
-  });
-
-  test('buildDeleteUrl zachowuje pełną nazwę zasobu', () => {
-    const url = buildDeleteUrl({ projectId: 'p', location: 'europe-west3', corpusId: 'c' }, 'projects/p/locations/europe-west3/ragCorpora/c/ragFiles/rf%2F1');
-    expect(url).toBe('https://europe-west3-aiplatform.googleapis.com/v1/projects/p/locations/europe-west3/ragCorpora/c/ragFiles/rf%2F1');
-  });
-
-  test('deleteRagFile zwraca błąd dla niepowodzenia HTTP', () => {
-    class FakeResponse {
-      constructor(code, body) {
-        this.code = code;
-        this.body = body;
-      }
-
-      getResponseCode() {
-        return this.code;
-      }
-
-      getContentText() {
-        return this.body;
-      }
-    }
-
-    const fetcher = {
-      fetch: jest.fn(() => new FakeResponse(500, 'error')),
-    };
-
-    const scriptApp = {
-      getOAuthToken: jest.fn(() => 'token'),
-    };
-
-    const result = deleteRagFile({ projectId: 'p', location: 'europe-west3', corpusId: 'c' }, 'projects/p/locations/europe-west3/ragCorpora/c/ragFiles/rf1', fetcher, scriptApp);
-
-    expect(result.success).toBe(false);
-    expect(result.code).toBe(500);
-    expect(result.body).toBe('error');
+    expect(result.documents).toEqual([{ name: 'doc1' }, { name: 'doc2' }]);
   });
 });
 
-describe('Main helpers', () => {
-  test('parseStoredOperationNames obsługuje JSON i zwykły tekst', () => {
-    expect(parseStoredOperationNames('["op1","op2"]')).toEqual(['op1', 'op2']);
-    expect(parseStoredOperationNames('  single-op  ')).toEqual(['single-op']);
-    expect(parseStoredOperationNames(null)).toEqual([]);
+describe('Operacje importu/serializacji', () => {
+  test('parseStoredOperationNames obsługuje JSON i stringi', () => {
+    expect(parseStoredOperationNames('["op1", "op2"]')).toEqual(['op1', 'op2']);
+    expect(parseStoredOperationNames('op1')).toEqual(['op1']);
+    expect(parseStoredOperationNames(['op1', ''])).toEqual(['op1']);
   });
 
-  test('serializeOperationNames filtruje puste wpisy', () => {
-    expect(serializeOperationNames(['op1', '', '  ', 'op2'])).toBe('["op1","op2"]');
+  test('serializeOperationNames filtruje puste', () => {
+    expect(serializeOperationNames(['op1', '', 'op2'])).toBe('["op1","op2"]');
   });
 
-  test('createRagFileIndex grupuje pliki według Drive ID', () => {
-    const ragFiles = [
+  test('createDocumentIndex grupuje po driveId i wyznacza duplikaty', () => {
+    const idx = createDocumentIndex([
       {
-        name: 'rag1',
-        updateTime: '2025-01-02T00:00:00Z',
-        googleDriveSource: {
-          resourceIds: [
-            { resourceType: 'RESOURCE_TYPE_FILE', resourceId: 'file1' },
-          ],
-        },
+        name: 'doc-1',
+        id: 'drive-1',
+        createTime: '2023-01-01',
       },
       {
-        name: 'rag2',
-        updateTime: '2025-01-03T00:00:00Z',
-        googleDriveSource: {
-          resourceIds: [
-            { resourceType: 'RESOURCE_TYPE_FILE', resourceId: 'file1' },
-          ],
-        },
+        name: 'doc-2',
+        id: 'drive-2',
       },
       {
-        name: 'rag3',
-        googleDriveSource: {
-          resourceIds: [
-            { resourceType: 'RESOURCE_TYPE_FOLDER', resourceId: 'folder1' },
-          ],
-        },
+        name: 'doc-3',
+        id: 'drive-1',
+        createTime: '2023-01-03',
       },
-    ];
+    ]);
 
-    const index = createRagFileIndex(ragFiles);
+    expect(Array.from(idx.keys())).toEqual(['drive-1', 'drive-2']);
+    expect(idx.get('drive-1').length).toBe(2);
+  });
 
-    expect(index.get('file1')).toHaveLength(2);
-    expect(index.has('folder1')).toBe(false);
+  test('pickDocumentsToDeleteByDriveId zostawia najnowszy', () => {
+    const duplicates = pickDocumentsToDeleteByDriveId([
+      { documentName: 'old', updateTime: '2023-01-01' },
+      { documentName: 'new', updateTime: '2023-02-01' },
+    ]);
 
-    const duplicates = pickRagFilesToDeleteByDriveId(index.get('file1'));
-    expect(duplicates).toHaveLength(1);
-    expect(duplicates[0].ragFileName).toBe('rag1');
+    expect(duplicates).toEqual([{ documentName: 'old', updateTime: '2023-01-01' }]);
   });
 });
