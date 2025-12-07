@@ -9,7 +9,7 @@ const CONFIG_KEYS = {
 
 const CONFIG_DEFAULTS = {
   projectId: '',
-  location: 'europe-west3',
+  location: 'global',
   dataStoreId: '',
   rootFolderId: '',
   logLevel: 'Information',

@@ -12,6 +12,7 @@ const {
   listDocuments,
   buildDeleteUrl,
   deleteDocument,
+  buildDiscoveryHost,
   buildDocumentsBaseUrl,
   importDocuments,
 } = require('../GoogleScript/04_vertex');
@@ -142,6 +143,11 @@ describe('Drive helpers', () => {
 });
 
 describe('Vertex helpers', () => {
+  test('buildDiscoveryHost obsługuje global oraz regiony', () => {
+    expect(buildDiscoveryHost('global')).toBe('https://discoveryengine.googleapis.com');
+    expect(buildDiscoveryHost('europe-west3')).toBe('https://europe-west3-discoveryengine.googleapis.com');
+  });
+
   test('buildImportUrl poprawnie koduje parametry', () => {
     const url = buildImportUrl({
       projectId: 'my project',
@@ -155,18 +161,18 @@ describe('Vertex helpers', () => {
   test('buildListUrl dodaje token strony', () => {
     const base = buildListUrl({
       projectId: 'p',
-      location: 'europe-west3',
+      location: 'global',
       dataStoreId: 'c',
     });
 
     const withToken = buildListUrl({
       projectId: 'p',
-      location: 'europe-west3',
+      location: 'global',
       dataStoreId: 'c',
     }, 'token/123');
 
-    expect(base).toBe('https://europe-west3-discoveryengine.googleapis.com/v1/projects/p/locations/europe-west3/collections/default_collection/dataStores/c/branches/default_branch/documents');
-    expect(withToken).toBe('https://europe-west3-discoveryengine.googleapis.com/v1/projects/p/locations/europe-west3/collections/default_collection/dataStores/c/branches/default_branch/documents?pageToken=token%2F123');
+    expect(base).toBe('https://discoveryengine.googleapis.com/v1/projects/p/locations/global/collections/default_collection/dataStores/c/branches/default_branch/documents');
+    expect(withToken).toBe('https://discoveryengine.googleapis.com/v1/projects/p/locations/global/collections/default_collection/dataStores/c/branches/default_branch/documents?pageToken=token%2F123');
   });
 
   test('listDocuments łączy wyniki z wielu stron', () => {

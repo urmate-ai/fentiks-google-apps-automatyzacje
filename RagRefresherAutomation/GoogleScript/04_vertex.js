@@ -1,12 +1,20 @@
 const Vertex = (() => {
   const DEFAULT_BRANCH = 'default_branch';
 
+  function buildDiscoveryHost(location) {
+    if (!location || location.trim() === 'global') {
+      return 'https://discoveryengine.googleapis.com';
+    }
+
+    return `https://${encodeURIComponent(location)}-discoveryengine.googleapis.com`;
+  }
+
   function buildDocumentsBaseUrl(config) {
     const encodedProject = encodeURIComponent(config.projectId);
     const encodedLocation = encodeURIComponent(config.location);
     const encodedDataStore = encodeURIComponent(config.dataStoreId);
 
-    return `https://${config.location}-discoveryengine.googleapis.com/v1/projects/${encodedProject}/locations/${encodedLocation}/collections/default_collection/dataStores/${encodedDataStore}/branches/${DEFAULT_BRANCH}/documents`;
+    return `${buildDiscoveryHost(config.location)}/v1/projects/${encodedProject}/locations/${encodedLocation}/collections/default_collection/dataStores/${encodedDataStore}/branches/${DEFAULT_BRANCH}/documents`;
   }
 
   function buildImportUrl(config) {
@@ -23,9 +31,9 @@ const Vertex = (() => {
   }
 
   function buildDeleteUrl(config, documentName) {
-    if (documentName && documentName.startsWith('projects/')) {
-      return `https://${config.location}-discoveryengine.googleapis.com/v1/${documentName}`;
-    }
+      if (documentName && documentName.startsWith('projects/')) {
+        return `${buildDiscoveryHost(config.location)}/v1/${documentName}`;
+      }
 
     return `${buildDocumentsBaseUrl(config)}/${encodeURIComponent(documentName)}`;
   }
@@ -153,7 +161,7 @@ const Vertex = (() => {
   }
 
   function buildOperationStatusUrl(config, operationName) {
-    return `https://${config.location}-discoveryengine.googleapis.com/v1/${operationName}`;
+    return `${buildDiscoveryHost(config.location)}/v1/${operationName}`;
   }
 
   function checkOperationStatus(config, operationName, urlFetchApp, scriptApp) {
@@ -194,6 +202,7 @@ const Vertex = (() => {
     listDocuments,
     buildDeleteUrl,
     deleteDocument,
+    buildDiscoveryHost,
     buildDocumentsBaseUrl,
   };
 })();

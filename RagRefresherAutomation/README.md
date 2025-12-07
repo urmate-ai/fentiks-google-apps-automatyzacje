@@ -22,7 +22,7 @@ Automatyzacja odświeża dane w Vertex AI Search (data store) dla firmy Fentix. 
 
 1. Dostosuj właściwości skryptu Apps Script (menu **Project Settings → Script properties**) lub wartości domyślne w pliku `GoogleScript/01_config.js`.
 - `RAG_REFRESHER_PROJECT_ID` – identyfikator projektu Google Cloud.
-- `RAG_REFRESHER_LOCATION` – region Vertex AI Search (domyślnie `europe-west3`).
+- `RAG_REFRESHER_LOCATION` – lokalizacja data store Vertex AI Search (w większości przypadków `global`; jeśli w UI data store widzisz region, wpisz ten region).
 - `RAG_REFRESHER_DATA_STORE_ID` – identyfikator data store w Vertex AI Search (pole wymagane; skrypt go nie tworzy).
 - `RAG_REFRESHER_ROOT_FOLDER_ID` – ID folderu na Dysku Google, z którego mają być zbierane pliki.
 - `RAG_REFRESHER_LOG_LEVEL` – poziom logowania (`Error`, `Warning`, `Information`, `Debug`, `None`).
