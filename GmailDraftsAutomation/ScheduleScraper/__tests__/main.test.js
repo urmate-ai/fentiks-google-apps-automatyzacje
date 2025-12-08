@@ -125,7 +125,7 @@ describe('scrapeScheduleToDrive', () => {
     expect(result.success).toBe(true);
     expect(result.count).toBe(2);
     expect(result.format).toBe('json');
-    expect(result.fileName).toBe('terminarz.json');
+    expect(result.fileName).toBe('terminarz_szkolen.json');
     expect(result.fileId).toBeDefined();
     expect(driveCreateMock).toHaveBeenCalled();
   });
@@ -142,7 +142,7 @@ describe('scrapeScheduleToDrive', () => {
     expect(result.success).toBe(true);
     expect(result.count).toBe(2);
     expect(result.format).toBe('csv');
-    expect(result.fileName).toBe('terminarz.csv');
+    expect(result.fileName).toBe('terminarz_szkolen.csv');
     
     const callArgs = driveCreateMock.mock.calls[0];
     const blob = callArgs[1];
@@ -190,7 +190,7 @@ describe('scrapeScheduleToDrive', () => {
     const existingFile = {
       id: existingFileId,
       getId: () => existingFileId,
-      getName: () => 'terminarz.json',
+      getName: () => 'terminarz_szkolen.json',
     };
     fileStore.set(existingFileId, existingFile);
     global.DriveApp.getFileById.mockReturnValue(existingFile);
@@ -200,7 +200,7 @@ describe('scrapeScheduleToDrive', () => {
 
     expect(result.success).toBe(true);
     expect(result.count).toBe(2);
-    expect(result.fileName).toBe('terminarz.json');
+    expect(result.fileName).toBe('terminarz_szkolen.json');
     expect(result.fileId).toBe(existingFileId);
     
     // Should update existing file, not create new one

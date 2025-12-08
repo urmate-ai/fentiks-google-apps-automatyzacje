@@ -23,11 +23,16 @@ const ScheduleMain = (() => {
   } = Scraper || {};
 
   function resolveTargetFolderId() {
+    // Get CONFIG_KEYS from globalThis (for Google Apps Script) or Config (for Node.js tests)
+    const CONFIG_KEYS = (typeof globalThis !== 'undefined' && globalThis.CONFIG_KEYS)
+      || (Config && Config.CONFIG_KEYS)
+      || {};
+    
     const scriptProps = typeof PropertiesService !== 'undefined' && PropertiesService.getScriptProperties
       ? PropertiesService.getScriptProperties()
       : null;
-    if (scriptProps && typeof scriptProps.getProperty === 'function') {
-      const raw = scriptProps.getProperty(Config.CONFIG_KEYS.TARGET_FOLDER_ID);
+    if (scriptProps && typeof scriptProps.getProperty === 'function' && CONFIG_KEYS.TARGET_FOLDER_ID) {
+      const raw = scriptProps.getProperty(CONFIG_KEYS.TARGET_FOLDER_ID);
       if (raw !== null && raw !== undefined) {
         const trimmed = String(raw).trim();
         if (trimmed !== '') return trimmed;
@@ -39,7 +44,9 @@ const ScheduleMain = (() => {
       if (trimmed !== '') return trimmed;
       return '';
     }
-    const fallback = Config.TARGET_FOLDER_ID;
+    const fallback = (typeof globalThis !== 'undefined' && globalThis.TARGET_FOLDER_ID)
+      || (Config && Config.TARGET_FOLDER_ID)
+      || '';
     if (fallback && String(fallback).trim() !== '') {
       return String(fallback).trim();
     }
@@ -47,10 +54,16 @@ const ScheduleMain = (() => {
   }
 
   function resolveFileFormat() {
+    // Get CONFIG_KEYS from globalThis (for Google Apps Script) or Config (for Node.js tests)
+    const CONFIG_KEYS = (typeof globalThis !== 'undefined' && globalThis.CONFIG_KEYS)
+      || (Config && Config.CONFIG_KEYS)
+      || {};
+    
     if (typeof PropertiesService !== 'undefined'
       && PropertiesService.getScriptProperties
-      && typeof PropertiesService.getScriptProperties().getProperty === 'function') {
-      const raw = PropertiesService.getScriptProperties().getProperty(Config.CONFIG_KEYS.FILE_FORMAT);
+      && typeof PropertiesService.getScriptProperties().getProperty === 'function'
+      && CONFIG_KEYS.FILE_FORMAT) {
+      const raw = PropertiesService.getScriptProperties().getProperty(CONFIG_KEYS.FILE_FORMAT);
       if (raw !== null && raw !== undefined && String(raw).trim() !== '') {
         return String(raw).trim();
       }
@@ -58,7 +71,9 @@ const ScheduleMain = (() => {
     if (typeof globalThis !== 'undefined' && globalThis.FILE_FORMAT !== undefined) {
       return globalThis.FILE_FORMAT;
     }
-    return Config.FILE_FORMAT || 'json';
+    return (typeof globalThis !== 'undefined' && globalThis.FILE_FORMAT)
+      || (Config && Config.FILE_FORMAT)
+      || 'json';
   }
 
   if (!DriveHelpers || !Scraper) {
@@ -98,7 +113,7 @@ const ScheduleMain = (() => {
       const mimeType = format === 'csv' ? 'text/csv' : 'application/json';
 
       // Use fixed filename (without timestamp) so the file gets updated instead of creating new ones
-      const fileName = `terminarz.${extension}`;
+      const fileName = `terminarz_szkolen.${extension}`;
 
       // Convert entries to the selected format
       const content = format === 'csv' ? toCsv(entries) : toJson(entries);
