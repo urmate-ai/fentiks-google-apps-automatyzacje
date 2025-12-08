@@ -97,14 +97,13 @@ const ScheduleMain = (() => {
       const extension = format === 'csv' ? 'csv' : 'json';
       const mimeType = format === 'csv' ? 'text/csv' : 'application/json';
 
-      // Generate filename with timestamp
-      const timestamp = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd_HH-mm-ss');
-      const fileName = `terminarz_${timestamp}.${extension}`;
+      // Use fixed filename (without timestamp) so the file gets updated instead of creating new ones
+      const fileName = `terminarz.${extension}`;
 
       // Convert entries to the selected format
       const content = format === 'csv' ? toCsv(entries) : toJson(entries);
 
-      // Save to Drive
+      // Save to Drive (will update existing file if it exists, otherwise create new)
       const file = getOrCreateFile(targetFolder, fileName, content, mimeType);
 
       logger.info('Zapisano terminarz do Dysku Google', fileName, `folder=${targetFolderId}`);

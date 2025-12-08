@@ -125,7 +125,7 @@ describe('scrapeScheduleToDrive', () => {
     expect(result.success).toBe(true);
     expect(result.count).toBe(2);
     expect(result.format).toBe('json');
-    expect(result.fileName).toMatch(/^terminarz_\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}\.json$/);
+    expect(result.fileName).toBe('terminarz.json');
     expect(result.fileId).toBeDefined();
     expect(driveCreateMock).toHaveBeenCalled();
   });
@@ -142,7 +142,7 @@ describe('scrapeScheduleToDrive', () => {
     expect(result.success).toBe(true);
     expect(result.count).toBe(2);
     expect(result.format).toBe('csv');
-    expect(result.fileName).toMatch(/^terminarz_\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}\.csv$/);
+    expect(result.fileName).toBe('terminarz.csv');
     
     const callArgs = driveCreateMock.mock.calls[0];
     const blob = callArgs[1];
@@ -178,5 +178,33 @@ describe('scrapeScheduleToDrive', () => {
 
     const { scrapeScheduleToDrive } = require(mainPath);
     expect(() => scrapeScheduleToDrive()).toThrow();
+  });
+
+  it('updates existing file instead of creating new one', () => {
+    // Mock that file already exists
+    const existingFileId = 'existing-file-123';
+    driveListMock.mockReturnValue({
+      files: [{ id: existingFileId }],
+    });
+    
+    const existingFile = {
+      id: existingFileId,
+      getId: () => existingFileId,
+      getName: () => 'terminarz.json',
+    };
+    fileStore.set(existingFileId, existingFile);
+    global.DriveApp.getFileById.mockReturnValue(existingFile);
+
+    const { scrapeScheduleToDrive } = require(mainPath);
+    const result = scrapeScheduleToDrive();
+
+    expect(result.success).toBe(true);
+    expect(result.count).toBe(2);
+    expect(result.fileName).toBe('terminarz.json');
+    expect(result.fileId).toBe(existingFileId);
+    
+    // Should update existing file, not create new one
+    expect(driveUpdateMock).toHaveBeenCalled();
+    expect(driveCreateMock).not.toHaveBeenCalled();
   });
 });
