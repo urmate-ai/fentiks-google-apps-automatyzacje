@@ -118,7 +118,7 @@ describe('RagRefresher.syncRagFromDrive', () => {
     );
   });
 
-  it('zatrzymuje się po pierwszej partii, gdy operacja importu wciąż trwa', () => {
+  it('kontynuuje przetwarzanie wszystkich partii, nawet gdy operacja importu wciąż trwa', () => {
     const fileIds = Array.from({ length: 30 }, (_, index) => `file-${index + 1}`);
     driveModule.listAllFileIdsRecursively.mockReturnValue(fileIds);
     driveModule.readFileContents.mockImplementation(ids => ids.map(id => ({ id, content: `content-${id}` })));
@@ -128,10 +128,12 @@ describe('RagRefresher.syncRagFromDrive', () => {
 
     RagRefresher.syncRagFromDrive();
 
-    expect(vertexModule.importDocuments).toHaveBeenCalledTimes(1);
+    // Implementation continues processing all batches even if operations are still in progress
+    // 30 files / 25 per batch = 2 batches
+    expect(vertexModule.importDocuments).toHaveBeenCalledTimes(2);
     expect(propsMock.setProperty).toHaveBeenCalledWith(
       configModule.CONFIG_KEYS.activeOperation,
-      JSON.stringify(['import-op']),
+      JSON.stringify(['import-op', 'import-op']),
     );
   });
 });

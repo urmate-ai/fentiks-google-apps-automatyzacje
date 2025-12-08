@@ -141,7 +141,7 @@ describe('Vertex helpers', () => {
       dataStoreId: '123/456',
     });
 
-    expect(url).toBe('https://discoveryengine.googleapis.com/v1/projects/my%20project/locations/europe-west3/collections/default_collection/dataStores/123%2F456/branches/default_branch/documents:import');
+    expect(url).toBe('https://discoveryengine.googleapis.com/v1/projects/my%20project/locations/europe-west3/collections/default_collection/dataStores/123%2F456/branches/0/documents:import');
   });
 
   test('buildListUrl dodaje token strony', () => {
@@ -157,8 +157,8 @@ describe('Vertex helpers', () => {
       dataStoreId: 'c',
     }, 'token/123');
 
-    expect(base).toBe('https://discoveryengine.googleapis.com/v1/projects/p/locations/europe-west3/collections/default_collection/dataStores/c/branches/default_branch/documents');
-    expect(withToken).toBe('https://discoveryengine.googleapis.com/v1/projects/p/locations/europe-west3/collections/default_collection/dataStores/c/branches/default_branch/documents?pageToken=token%2F123');
+    expect(base).toBe('https://discoveryengine.googleapis.com/v1/projects/p/locations/europe-west3/collections/default_collection/dataStores/c/branches/0/documents');
+    expect(withToken).toBe('https://discoveryengine.googleapis.com/v1/projects/p/locations/europe-west3/collections/default_collection/dataStores/c/branches/0/documents?pageToken=token%2F123');
   });
 
   test('listDocuments łączy wyniki z wielu stron', () => {

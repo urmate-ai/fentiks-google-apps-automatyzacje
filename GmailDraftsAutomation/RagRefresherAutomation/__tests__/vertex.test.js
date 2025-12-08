@@ -15,6 +15,10 @@ describe('Vertex.buildImportPayload', () => {
         documents: [
           {
             id: 'file-1',
+            content: {
+              mimeType: 'text/plain',
+              rawBytes: expect.any(String),
+            },
             structData: {
               driveId: 'file-1',
               entries: [{ a: 1 }, { b: 2 }],
@@ -23,6 +27,10 @@ describe('Vertex.buildImportPayload', () => {
         ],
       },
     });
+    // Verify that rawBytes is base64 encoded content
+    const contentText = Buffer.from(payload.inlineSource.documents[0].content.rawBytes, 'base64').toString('utf-8');
+    expect(contentText).toContain('{"a":1}');
+    expect(contentText).toContain('{"b":2}');
   });
 
   it('oznacza niepoprawne linie w JSONL jako raw z błędem parsowania', () => {
@@ -38,6 +46,11 @@ describe('Vertex.buildImportPayload', () => {
       { ok: true },
       expect.objectContaining({ raw: 'not-json', parseError: expect.any(String) }),
     ]);
+    // Verify that content field is present with base64 encoded text
+    expect(payload.inlineSource.documents[0].content).toEqual({
+      mimeType: 'text/plain',
+      rawBytes: expect.any(String),
+    });
   });
 
   it('obsługuje pustą treść jako pustą listę entries', () => {
