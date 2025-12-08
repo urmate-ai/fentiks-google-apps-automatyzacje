@@ -11,7 +11,7 @@ REM Clear previous log file
 > "%LOG_FILE%" echo Test run started at %date% %time%
 
 REM List of directories to run tests in
-set "DIRS=BusinessCardAutomation GmailDraftsAutomation\GeminiEmailAutomation GmailDraftsAutomation\GmailKnowledgeSyncer GmailDraftsAutomation\RagRefresherAutomation InvoicesAutomation WooCommerceAutomatization"
+set "DIRS=BusinessCardAutomation GmailDraftsAutomation\GeminiEmailAutomation GmailDraftsAutomation\GmailKnowledgeSyncer GmailDraftsAutomation\RagRefresherAutomation GmailDraftsAutomation\ScheduleScraper InvoicesAutomation WooCommerceAutomatization"
 
 set "FAILED_COUNT=0"
 set "PASSED_COUNT=0"
