@@ -22,12 +22,44 @@ const ScheduleMain = (() => {
     toCsv,
   } = Scraper || {};
 
-  const TARGET_FOLDER_ID = (typeof globalThis !== 'undefined' && globalThis.TARGET_FOLDER_ID !== undefined)
-    ? globalThis.TARGET_FOLDER_ID
-    : Config.TARGET_FOLDER_ID;
-  const FILE_FORMAT = (typeof globalThis !== 'undefined' && globalThis.FILE_FORMAT !== undefined)
-    ? globalThis.FILE_FORMAT
-    : Config.FILE_FORMAT || 'json';
+  function resolveTargetFolderId() {
+    const scriptProps = typeof PropertiesService !== 'undefined' && PropertiesService.getScriptProperties
+      ? PropertiesService.getScriptProperties()
+      : null;
+    if (scriptProps && typeof scriptProps.getProperty === 'function') {
+      const raw = scriptProps.getProperty(Config.CONFIG_KEYS.TARGET_FOLDER_ID);
+      if (raw !== null && raw !== undefined) {
+        const trimmed = String(raw).trim();
+        if (trimmed !== '') return trimmed;
+        return '';
+      }
+    }
+    if (typeof globalThis !== 'undefined' && globalThis.TARGET_FOLDER_ID !== undefined) {
+      const trimmed = String(globalThis.TARGET_FOLDER_ID).trim();
+      if (trimmed !== '') return trimmed;
+      return '';
+    }
+    const fallback = Config.TARGET_FOLDER_ID;
+    if (fallback && String(fallback).trim() !== '') {
+      return String(fallback).trim();
+    }
+    return '';
+  }
+
+  function resolveFileFormat() {
+    if (typeof PropertiesService !== 'undefined'
+      && PropertiesService.getScriptProperties
+      && typeof PropertiesService.getScriptProperties().getProperty === 'function') {
+      const raw = PropertiesService.getScriptProperties().getProperty(Config.CONFIG_KEYS.FILE_FORMAT);
+      if (raw !== null && raw !== undefined && String(raw).trim() !== '') {
+        return String(raw).trim();
+      }
+    }
+    if (typeof globalThis !== 'undefined' && globalThis.FILE_FORMAT !== undefined) {
+      return globalThis.FILE_FORMAT;
+    }
+    return Config.FILE_FORMAT || 'json';
+  }
 
   if (!DriveHelpers || !Scraper) {
     throw new Error('Required helpers are not available');
@@ -37,7 +69,10 @@ const ScheduleMain = (() => {
    * Main function: scrapes schedule and saves to Drive
    */
   function scrapeScheduleToDrive() {
-    if (!TARGET_FOLDER_ID) {
+    const targetFolderId = resolveTargetFolderId();
+    const fileFormat = resolveFileFormat();
+
+    if (!targetFolderId) {
       throw new Error('TARGET_FOLDER_ID is not configured. Please set SCHEDULE_SCRAPER_TARGET_FOLDER_ID in script properties.');
     }
 
@@ -55,10 +90,10 @@ const ScheduleMain = (() => {
       logger.info(`Pobrano ${entries.length} wpisów z terminarza`);
 
       // Get target folder
-      const targetFolder = getFolderById(TARGET_FOLDER_ID);
+      const targetFolder = getFolderById(targetFolderId);
 
       // Determine file format and extension
-      const format = FILE_FORMAT.toLowerCase();
+      const format = String(fileFormat || 'json').toLowerCase();
       const extension = format === 'csv' ? 'csv' : 'json';
       const mimeType = format === 'csv' ? 'text/csv' : 'application/json';
 
@@ -72,7 +107,7 @@ const ScheduleMain = (() => {
       // Save to Drive
       const file = getOrCreateFile(targetFolder, fileName, content, mimeType);
 
-      logger.info('Zapisano terminarz do Dysku Google', fileName, `folder=${TARGET_FOLDER_ID}`);
+      logger.info('Zapisano terminarz do Dysku Google', fileName, `folder=${targetFolderId}`);
 
       return {
         success: true,

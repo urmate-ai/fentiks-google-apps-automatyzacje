@@ -54,14 +54,22 @@ const DriveHelpers = (() => {
     if (existingId) {
       logger.info('Plik już istnieje, aktualizuję', name, `id=${existingId}`);
       updateFile(existingId, content, mimeType);
-      return DriveApp.getFileById(existingId);
+      const existingFile = DriveApp.getFileById(existingId);
+      if (existingFile && typeof existingFile.getId !== 'function') {
+        existingFile.getId = () => existingId;
+      }
+      return existingFile;
     }
     const newId = createFile(folderId, name, content, mimeType);
     if (!newId) {
       throw new Error(`Nie udało się utworzyć pliku ${name}`);
     }
     logger.info('Utworzono nowy plik', name, `id=${newId}`);
-    return DriveApp.getFileById(newId);
+    const newFile = DriveApp.getFileById(newId);
+    if (newFile && typeof newFile.getId !== 'function') {
+      newFile.getId = () => newId;
+    }
+    return newFile;
   }
 
   function getFolderById(folderId) {
