@@ -48,6 +48,16 @@ const Drive = (() => {
     return Array.from(collectedFileIds);
   }
 
+  function readFileContents(fileIds, driveApp) {
+    const drive = resolveDriveApp(driveApp);
+
+    return fileIds.map(id => {
+      const file = drive.getFileById(id);
+      const content = file.getBlob().getDataAsString();
+      return { id, content };
+    });
+  }
+
   function resolveDriveApp(driveApp) {
     if (driveApp) {
       return driveApp;
@@ -60,7 +70,7 @@ const Drive = (() => {
     return DriveApp;
   }
 
-  return { listAllFileIdsRecursively, resolveDriveApp, shouldIgnoreFile };
+  return { listAllFileIdsRecursively, resolveDriveApp, shouldIgnoreFile, readFileContents };
 })();
 
 if (typeof module !== 'undefined') {

@@ -1,7 +1,7 @@
 const CONFIG_KEYS = {
   projectId: 'RAG_REFRESHER_PROJECT_ID',
   location: 'RAG_REFRESHER_LOCATION',
-  corpusId: 'RAG_REFRESHER_CORPUS_ID',
+  dataStoreId: 'RAG_REFRESHER_DATA_STORE_ID',
   rootFolderId: 'RAG_REFRESHER_ROOT_FOLDER_ID',
   logLevel: 'RAG_REFRESHER_LOG_LEVEL',
   activeOperation: 'RAG_REFRESHER_ACTIVE_IMPORT_OP',
@@ -10,7 +10,7 @@ const CONFIG_KEYS = {
 const CONFIG_DEFAULTS = {
   projectId: '',
   location: 'europe-west3',
-  corpusId: '',
+  dataStoreId: '',
   rootFolderId: '',
   logLevel: 'Information',
 };
@@ -36,14 +36,14 @@ function getConfig(properties) {
 
   const projectId = readProperty(props, CONFIG_KEYS.projectId, CONFIG_DEFAULTS.projectId);
   const location = readProperty(props, CONFIG_KEYS.location, CONFIG_DEFAULTS.location);
-  const corpusId = readProperty(props, CONFIG_KEYS.corpusId, CONFIG_DEFAULTS.corpusId);
+  const dataStoreId = readProperty(props, CONFIG_KEYS.dataStoreId, CONFIG_DEFAULTS.dataStoreId);
   const rootFolderId = readProperty(props, CONFIG_KEYS.rootFolderId, CONFIG_DEFAULTS.rootFolderId);
   const logLevel = normalizeLogLevel(
     readProperty(props, CONFIG_KEYS.logLevel),
     CONFIG_DEFAULTS.logLevel,
   );
 
-  return { projectId, location, corpusId, rootFolderId, logLevel };
+  return { projectId, location, dataStoreId, rootFolderId, logLevel };
 }
 
 function resolveProperties(properties) {

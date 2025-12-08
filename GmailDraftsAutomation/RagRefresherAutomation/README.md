@@ -1,6 +1,6 @@
 # RagRefresherAutomation
 
-Automatyzacja odświeża korpus Vertex AI RAG dla firmy Fentix. Skrypt Google Apps Script monitoruje wskazany folder na Dysku Google i co 30 minut wysyła listę plików do ponownego zaindeksowania w usłudze Vertex AI.
+Automatyzacja odświeża datastore Vertex AI Search dla firmy Fentix. Skrypt Google Apps Script monitoruje wskazany folder na Dysku Google i co 30 minut wysyła listę plików do ponownego zaindeksowania w usłudze Vertex AI Search.
 
 ## Wymagania
 
@@ -23,7 +23,7 @@ Automatyzacja odświeża korpus Vertex AI RAG dla firmy Fentix. Skrypt Google Ap
 1. Dostosuj właściwości skryptu Apps Script (menu **Project Settings → Script properties**) lub wartości domyślne w pliku `GoogleScript/01_config.js`.
    - `RAG_REFRESHER_PROJECT_ID` – identyfikator projektu Google Cloud.
    - `RAG_REFRESHER_LOCATION` – region Vertex AI (domyślnie `europe-west3`).
-   - `RAG_REFRESHER_CORPUS_ID` – identyfikator korpusu Vertex AI RAG.
+- `RAG_REFRESHER_DATA_STORE_ID` – identyfikator Vertex AI Search data store (z kolekcji `default_collection`).
    - `RAG_REFRESHER_ROOT_FOLDER_ID` – ID folderu na Dysku Google, z którego mają być zbierane pliki.
    - `RAG_REFRESHER_LOG_LEVEL` – poziom logowania (`Error`, `Warning`, `Information`, `Debug`, `None`).
 

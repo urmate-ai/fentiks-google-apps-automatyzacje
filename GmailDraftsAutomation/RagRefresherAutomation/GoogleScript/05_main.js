@@ -31,10 +31,47 @@ const RagRefresher = (() => {
     (msg => console.debug ? console.debug(`[Debug] ${msg}`) : console.log(`[Debug] ${msg}`));
 
   const listAllFileIdsRecursively = driveModule.listAllFileIdsRecursively || globalThis.listAllFileIdsRecursively;
-  const listRagFiles = vertexModule.listRagFiles || globalThis.listRagFiles;
-  const deleteRagFile = vertexModule.deleteRagFile || globalThis.deleteRagFile;
-  const importRagFiles = vertexModule.importRagFiles || globalThis.importRagFiles;
+  const readFileContents = driveModule.readFileContents || globalThis.readFileContents;
+  const listDocuments = vertexModule.listDocuments || globalThis.listDocuments;
+  const deleteDocument = vertexModule.deleteDocument || globalThis.deleteDocument;
+  const importDocuments = vertexModule.importDocuments || globalThis.importDocuments;
   const checkOperationStatus = vertexModule.checkOperationStatus || globalThis.checkOperationStatus;
+
+  function sleepMs(ms) {
+    if (typeof ms !== 'number' || ms <= 0) {
+      return;
+    }
+
+    if (typeof Utilities !== 'undefined' && typeof Utilities.sleep === 'function') {
+      Utilities.sleep(ms);
+      return;
+    }
+
+    if (typeof globalThis.sleep === 'function') {
+      globalThis.sleep(ms);
+    }
+  }
+
+  function waitForOperationCompletion(config, operationName, options = {}) {
+    const maxAttempts = options.maxAttempts || 12;
+    const initialDelayMs = options.initialDelayMs || 5000;
+    const maxDelayMs = options.maxDelayMs || 15000;
+
+    let delay = initialDelayMs;
+
+    for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+      const status = checkOperationStatus ? checkOperationStatus(config, operationName) : { done: true };
+
+      if (status.done) {
+        return status;
+      }
+
+      sleepMs(delay);
+      delay = Math.min(Math.floor(delay * 1.5), maxDelayMs);
+    }
+
+    return { done: false };
+  }
 
   const MAX_RESOURCE_IDS_PER_IMPORT = 25;
 
@@ -80,39 +117,33 @@ const RagRefresher = (() => {
     return JSON.stringify(operationNames.filter(name => typeof name === 'string' && name.trim() !== ''));
   }
 
-  function createRagFileIndex(ragFiles) {
+  function createDocumentIndex(documents) {
     const byDriveId = new Map();
 
-    ragFiles.forEach(file => {
-      const source = file && file.googleDriveSource;
-      if (!source || !Array.isArray(source.resourceIds)) {
+    documents.forEach(doc => {
+      const driveId = doc.id || extractDocumentId(doc.name);
+      if (!driveId) {
         return;
       }
 
-      source.resourceIds.forEach(resource => {
-        if (!resource || resource.resourceType !== 'RESOURCE_TYPE_FILE' || !resource.resourceId) {
-          return;
-        }
+      const entry = {
+        documentName: doc.name,
+        driveId,
+        createTime: doc.createTime || '',
+        updateTime: doc.updateTime || '',
+      };
 
-        const entry = {
-          ragFileName: file.name,
-          driveId: resource.resourceId,
-          createTime: file.createTime || '',
-          updateTime: file.updateTime || '',
-        };
-
-        if (!byDriveId.has(resource.resourceId)) {
-          byDriveId.set(resource.resourceId, [entry]);
-        } else {
-          byDriveId.get(resource.resourceId).push(entry);
-        }
-      });
+      if (!byDriveId.has(driveId)) {
+        byDriveId.set(driveId, [entry]);
+      } else {
+        byDriveId.get(driveId).push(entry);
+      }
     });
 
     return byDriveId;
   }
 
-  function pickRagFilesToDeleteByDriveId(entries) {
+  function pickDocumentsToDeleteByDriveId(entries) {
     if (!entries || entries.length <= 1) {
       return [];
     }
@@ -130,12 +161,21 @@ const RagRefresher = (() => {
     return copy.slice(1);
   }
 
+  function extractDocumentId(documentName) {
+    if (!documentName || typeof documentName !== 'string') {
+      return '';
+    }
+
+    const parts = documentName.split('/');
+    return parts.length ? parts[parts.length - 1] : '';
+  }
+
   function syncRagFromDrive_() {
     const config = getConfig ? getConfig() : {};
     const props = resolveProperties ? resolveProperties() : null;
 
-    if (!config.projectId || !config.corpusId || !config.rootFolderId) {
-      logError('Brak wymaganej konfiguracji (projectId, corpusId lub rootFolderId).');
+    if (!config.projectId || !config.dataStoreId || !config.rootFolderId) {
+      logError('Brak wymaganej konfiguracji (projectId, dataStoreId lub rootFolderId).');
       return;
     }
 
@@ -170,40 +210,40 @@ const RagRefresher = (() => {
     const fileIds = listAllFileIdsRecursively ? listAllFileIdsRecursively(config.rootFolderId) : [];
     const fileIdSet = new Set(fileIds);
 
-    const ragFilesResult = listRagFiles ? listRagFiles(config) : { success: true, ragFiles: [] };
-    if (!ragFilesResult.success) {
-      logError(`Nie udało się pobrać listy plików z Vertex AI (${ragFilesResult.code}): ${ragFilesResult.body}`);
+    const documentsResult = listDocuments ? listDocuments(config) : { success: true, documents: [] };
+    if (!documentsResult.success) {
+      logError(`Nie udało się pobrać listy dokumentów Vertex AI Search (${documentsResult.code}): ${documentsResult.body}`);
       return;
     }
 
-    const ragFilesIndex = createRagFileIndex(ragFilesResult.ragFiles || []);
-    const filesToImport = fileIds.filter(id => !ragFilesIndex.has(id));
-    const ragFilesToDelete = [];
+    const documentsIndex = createDocumentIndex(documentsResult.documents || []);
+    const filesToImport = fileIds.filter(id => !documentsIndex.has(id));
+    const documentsToDelete = [];
 
-    ragFilesIndex.forEach((entries, driveId) => {
+    documentsIndex.forEach((entries, driveId) => {
       if (!fileIdSet.has(driveId)) {
         entries.forEach(entry => {
-          if (entry.ragFileName) {
-            ragFilesToDelete.push({ ragFileName: entry.ragFileName, driveId });
+          if (entry.documentName) {
+            documentsToDelete.push({ documentName: entry.documentName, driveId });
           }
         });
         return;
       }
 
-      const duplicates = pickRagFilesToDeleteByDriveId(entries);
+      const duplicates = pickDocumentsToDeleteByDriveId(entries);
       duplicates.forEach(entry => {
-        if (entry.ragFileName) {
-          ragFilesToDelete.push({ ragFileName: entry.ragFileName, driveId });
+        if (entry.documentName) {
+          documentsToDelete.push({ documentName: entry.documentName, driveId });
         }
       });
     });
 
-    if (filesToImport.length === 0 && ragFilesToDelete.length === 0) {
+    if (filesToImport.length === 0 && documentsToDelete.length === 0) {
       logInfo('Brak zmian w plikach – pomijam synchronizację.');
       return;
     }
 
-    logDebug(`Zebrano ${fileIds.length} plików na Dysku. Nowe: ${filesToImport.length}, do usunięcia: ${ragFilesToDelete.length}.`);
+    logDebug(`Zebrano ${fileIds.length} plików na Dysku. Nowe: ${filesToImport.length}, do usunięcia: ${documentsToDelete.length}.`);
 
     const newOperations = [];
     const updateActiveOperations = () => {
@@ -218,14 +258,14 @@ const RagRefresher = (() => {
       }
     };
 
-    ragFilesToDelete.forEach(item => {
-      const result = deleteRagFile ? deleteRagFile(config, item.ragFileName) : { success: false };
+    documentsToDelete.forEach(item => {
+      const result = deleteDocument ? deleteDocument(config, item.documentName) : { success: false };
       if (!result.success) {
-        logError(`Błąd usuwania pliku ${item.driveId || item.ragFileName} (${result.code}): ${result.body}`);
+        logError(`Błąd usuwania pliku ${item.driveId || item.documentName} (${result.code}): ${result.body}`);
         return;
       }
 
-      logInfo(`Usuwanie pliku ${item.driveId || item.ragFileName} rozpoczęte (${result.operationName}).`);
+      logInfo(`Usuwanie pliku ${item.driveId || item.documentName} rozpoczęte (${result.operationName || 'synchronous'}).`);
       if (result.operationName) {
         newOperations.push(result.operationName);
       }
@@ -236,7 +276,15 @@ const RagRefresher = (() => {
 
       for (let index = 0; index < batches.length; index += 1) {
         const batch = batches[index];
-        const importResult = importRagFiles ? importRagFiles(config, batch) : { success: false };
+        let documents;
+        try {
+          documents = readFileContents ? readFileContents(batch) : [];
+        } catch (err) {
+          logError(`Błąd odczytu plików z Dysku (${index + 1}/${batches.length}): ${err.message}`);
+          continue;
+        }
+
+        const importResult = importDocuments ? importDocuments(config, documents) : { success: false };
 
         if (!importResult.success) {
           const suffix = batches.length > 1 ? ` (partia ${index + 1}/${batches.length})` : '';
@@ -244,17 +292,38 @@ const RagRefresher = (() => {
           continue;
         }
 
-        logInfo(
+        const importLabel =
           batches.length > 1
-            ? `Import partii ${index + 1}/${batches.length} (${batch.length} plików) rozpoczęty: ${importResult.operationName}`
-            : `Import nowych plików rozpoczęty: ${importResult.operationName}`,
-        );
+            ? `Import partii ${index + 1}/${batches.length} (${batch.length} plików)`
+            : 'Import nowych plików';
+
+        logInfo(`${importLabel} rozpoczęty: ${importResult.operationName || 'synchronous'}`);
 
         if (importResult.operationName) {
+          // Save operation for tracking - we don't wait for completion to process next batches
           newOperations.push(importResult.operationName);
-          updateActiveOperations();
-          logInfo('Oczekiwanie na zakończenie bieżącej operacji importu przed uruchomieniem kolejnych partii.');
-          return;
+          
+          // Check status quickly (without long wait) - if already completed, log it
+          const quickStatus = checkOperationStatus ? checkOperationStatus(config, importResult.operationName) : { done: false };
+          if (quickStatus.done) {
+            if (quickStatus.error) {
+              logError(`${importLabel} zakończony z błędem: ${quickStatus.error}`);
+            } else {
+              logInfo(`${importLabel} zakończony.`);
+            }
+            // Remove from active operations list if already completed
+            const opIndex = newOperations.indexOf(importResult.operationName);
+            if (opIndex >= 0) {
+              newOperations.splice(opIndex, 1);
+            }
+          } else {
+            logInfo(`Operacja importu partii ${index + 1}/${batches.length} jest w toku - status zostanie sprawdzony w kolejnym uruchomieniu.`);
+          }
+          
+          // Short delay before next batch to avoid overloading the API
+          if (index < batches.length - 1) {
+            sleepMs(1000);
+          }
         }
       }
     }
@@ -266,10 +335,11 @@ const RagRefresher = (() => {
     syncRagFromDrive: syncRagFromDrive_,
     parseStoredOperationNames,
     serializeOperationNames,
-    createRagFileIndex,
-    pickRagFilesToDeleteByDriveId,
+    createDocumentIndex,
+    pickDocumentsToDeleteByDriveId,
     chunkIntoBatches,
     MAX_RESOURCE_IDS_PER_IMPORT,
+    waitForOperationCompletion,
   };
 })();
 

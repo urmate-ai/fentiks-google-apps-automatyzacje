@@ -1,0 +1,22 @@
+{
+  "name": "schedule-scraper",
+  "version": "1.0.0",
+  "description": "Automatyczne pobieranie terminarza szkoleń i egzaminów z fentiks.pl i zapisywanie do Dysku Google",
+  "main": "index.js",
+  "scripts": {
+    "test": "jest",
+    "clasp": "clasp",
+    "clasp:push": "cd GoogleScript && clasp push",
+    "clasp:login": "cd GoogleScript && clasp login",
+    "clasp:open": "cd GoogleScript && clasp open"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "devDependencies": {
+    "@google/clasp": "^2.4.2",
+    "@types/google-apps-script": "^2.0.1",
+    "jest": "^30.1.3"
+  }
+}

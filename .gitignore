@@ -3,3 +3,6 @@
 
 # Ignore SMS client certificates
 BusinessCardAutomation/Netlify/functions/certs/*.pem
+
+# Ignore test results log
+test-results.log
