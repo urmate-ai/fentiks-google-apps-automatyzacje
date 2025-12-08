@@ -28,14 +28,28 @@ for %%D in (%DIRS%) do (
         >> "%LOG_FILE%" echo ================================
         >> "%LOG_FILE%" echo Running npm test in %%D
         >> "%LOG_FILE%" echo ================================
+        REM Check if node_modules exists, if not install dependencies
+        if not exist "node_modules" (
+            echo Installing dependencies in %%D...
+            >> "%LOG_FILE%" echo Installing dependencies in %%D...
+            call npm install >> "%LOG_FILE%" 2>&1
+            if errorlevel 1 (
+                echo Failed to install dependencies in %%D
+                >> "%LOG_FILE%" echo Failed to install dependencies in %%D
+            ) else (
+                echo Dependencies installed successfully in %%D
+            )
+        )
+        echo Running tests...
         call npm test >> "%LOG_FILE%" 2>&1
-        set "TEST_RESULT=!errorlevel!"
-        if !TEST_RESULT! neq 0 (
-            echo npm test FAILED in %%D ^(error code: !TEST_RESULT!^)
+        if errorlevel 1 (
+            set "TEST_RESULT=1"
+            echo npm test FAILED in %%D
             >> "%LOG_FILE%" echo.
-            >> "%LOG_FILE%" echo *** npm test FAILED in %%D with error code !TEST_RESULT! ***
+            >> "%LOG_FILE%" echo *** npm test FAILED in %%D ***
             set /a FAILED_COUNT+=1
         ) else (
+            set "TEST_RESULT=0"
             echo npm test PASSED in %%D
             >> "%LOG_FILE%" echo.
             >> "%LOG_FILE%" echo *** npm test PASSED in %%D ***
@@ -68,15 +82,19 @@ echo.
 if %FAILED_COUNT% gtr 0 (
     echo.
     echo Some tests failed. Check %LOG_FILE% for details.
-    exit /b 1
+    >> "%LOG_FILE%" echo.
+    >> "%LOG_FILE%" echo Some tests failed.
+    set "EXIT_CODE=1"
 ) else (
     echo.
     echo All project tests completed successfully.
     >> "%LOG_FILE%" echo.
     >> "%LOG_FILE%" echo All project tests completed successfully.
+    set "EXIT_CODE=0"
 )
 
 echo.
 echo Full test results saved to: %LOG_FILE%
 echo.
 pause
+exit /b %EXIT_CODE%
