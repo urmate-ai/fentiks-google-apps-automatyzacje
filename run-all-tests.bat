@@ -78,3 +78,5 @@ if %FAILED_COUNT% gtr 0 (
 
 echo.
 echo Full test results saved to: %LOG_FILE%
+echo.
+pause
