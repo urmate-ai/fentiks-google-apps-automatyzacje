@@ -60,9 +60,28 @@ const Gemini = (() => {
       .map(s => s.trim())
       .filter(Boolean);
     if (!dataStores.length) return undefined;
+    
+    // Build full resource path if not already provided
+    const dataStoreId = dataStores[0];
+    let dataStorePath = dataStoreId;
+    
+    // If it's not a full path, construct it
+    if (!dataStoreId.includes('/')) {
+      const project = vertex.PROJECT_ID;
+      if (!project) {
+        throw new Error("VERTEX_PROJECT_ID must be set when using dataStore ID instead of full resource path.");
+      }
+      const location = vertex.LOCATION || "europe-west3";
+      // Default collection is "default_collection" if not specified
+      const collection = vertex.SEARCH_COLLECTION || "default_collection";
+      dataStorePath = `projects/${project}/locations/${location}/collections/${collection}/dataStores/${dataStoreId}`;
+    }
+    
     return [{
-      vertexAiSearch: {
-        dataStore: dataStores[0]
+      retrieval: {
+        vertexAiSearch: {
+          datastore: dataStorePath
+        }
       }
     }];
   }

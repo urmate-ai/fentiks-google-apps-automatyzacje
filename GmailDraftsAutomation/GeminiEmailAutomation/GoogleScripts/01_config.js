@@ -24,7 +24,8 @@ const CFG = (() => {
       ENDPOINT: get("VERTEX_ENDPOINT"),
       ACCESS_TOKEN: get("VERTEX_ACCESS_TOKEN"),
       SEARCH_DATA_STORES: searchDataStores,
-      SEARCH_DATA_STORE: searchDataStores
+      SEARCH_DATA_STORE: searchDataStores,
+      SEARCH_COLLECTION: get("VERTEX_SEARCH_COLLECTION", "default_collection")
     };
   })();
 
