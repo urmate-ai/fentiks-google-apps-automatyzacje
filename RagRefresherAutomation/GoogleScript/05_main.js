@@ -37,6 +37,42 @@ const RagRefresher = (() => {
   const importDocuments = vertexModule.importDocuments || globalThis.importDocuments;
   const checkOperationStatus = vertexModule.checkOperationStatus || globalThis.checkOperationStatus;
 
+  function sleepMs(ms) {
+    if (typeof ms !== 'number' || ms <= 0) {
+      return;
+    }
+
+    if (typeof Utilities !== 'undefined' && typeof Utilities.sleep === 'function') {
+      Utilities.sleep(ms);
+      return;
+    }
+
+    if (typeof globalThis.sleep === 'function') {
+      globalThis.sleep(ms);
+    }
+  }
+
+  function waitForOperationCompletion(config, operationName, options = {}) {
+    const maxAttempts = options.maxAttempts || 12;
+    const initialDelayMs = options.initialDelayMs || 5000;
+    const maxDelayMs = options.maxDelayMs || 15000;
+
+    let delay = initialDelayMs;
+
+    for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+      const status = checkOperationStatus ? checkOperationStatus(config, operationName) : { done: true };
+
+      if (status.done) {
+        return status;
+      }
+
+      sleepMs(delay);
+      delay = Math.min(Math.floor(delay * 1.5), maxDelayMs);
+    }
+
+    return { done: false };
+  }
+
   const MAX_RESOURCE_IDS_PER_IMPORT = 25;
 
   function chunkIntoBatches(items, batchSize) {
@@ -256,17 +292,28 @@ const RagRefresher = (() => {
           continue;
         }
 
-        logInfo(
+        const importLabel =
           batches.length > 1
-            ? `Import partii ${index + 1}/${batches.length} (${batch.length} plików) rozpoczęty: ${importResult.operationName || 'synchronous'}`
-            : `Import nowych plików rozpoczęty: ${importResult.operationName || 'synchronous'}`,
-        );
+            ? `Import partii ${index + 1}/${batches.length} (${batch.length} plików)`
+            : 'Import nowych plików';
+
+        logInfo(`${importLabel} rozpoczęty: ${importResult.operationName || 'synchronous'}`);
 
         if (importResult.operationName) {
-          newOperations.push(importResult.operationName);
-          updateActiveOperations();
-          logInfo('Oczekiwanie na zakończenie bieżącej operacji importu przed uruchomieniem kolejnych partii.');
-          return;
+          const status = waitForOperationCompletion(config, importResult.operationName);
+
+          if (!status.done) {
+            newOperations.push(importResult.operationName);
+            updateActiveOperations();
+            logInfo('Oczekiwanie na zakończenie bieżącej operacji importu przed uruchomieniem kolejnych partii.');
+            return;
+          }
+
+          if (status.error) {
+            logError(`${importLabel} zakończony z błędem: ${status.error}`);
+          } else {
+            logInfo(`${importLabel} zakończony.`);
+          }
         }
       }
     }
@@ -282,6 +329,7 @@ const RagRefresher = (() => {
     pickDocumentsToDeleteByDriveId,
     chunkIntoBatches,
     MAX_RESOURCE_IDS_PER_IMPORT,
+    waitForOperationCompletion,
   };
 })();
 
