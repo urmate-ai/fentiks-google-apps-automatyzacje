@@ -54,12 +54,19 @@ const Gemini = (() => {
   function buildVertexTools_(cfg) {
     const vertex = cfg.VERTEX || {};
     const searchRaw = vertex.SEARCH_DATA_STORES || vertex.SEARCH_DATA_STORE;
-    if (!searchRaw) return undefined;
+    if (!searchRaw) {
+      Log.debug("No data store configured - VERTEX_SEARCH_DATA_STORES/SEARCH_DATA_STORE is empty");
+      return undefined;
+    }
+    
     const dataStores = searchRaw
       .split(/[\,\n]/)
       .map(s => s.trim())
       .filter(Boolean);
-    if (!dataStores.length) return undefined;
+    if (!dataStores.length) {
+      Log.debug("No valid data store IDs found after parsing");
+      return undefined;
+    }
     
     // Build full resource path if not already provided
     const dataStoreId = dataStores[0];
@@ -77,13 +84,21 @@ const Gemini = (() => {
       dataStorePath = `projects/${project}/locations/${location}/collections/${collection}/dataStores/${dataStoreId}`;
     }
     
-    return [{
+    // Format tools for Vertex AI Search grounding
+    // NOTE: If this format doesn't work, try alternative format:
+    // { vertexRagRetrieval: { datastore: dataStorePath } }
+    const tools = [{
       retrieval: {
         vertexAiSearch: {
           datastore: dataStorePath
         }
       }
     }];
+    
+    Log.info("Built Vertex AI Search tools:", JSON.stringify(tools, null, 2));
+    Log.info("Data store path:", dataStorePath);
+    
+    return tools;
   }
 
   function callVertex_(cfg, system, user, extras, responseMimeType) {
@@ -98,7 +113,12 @@ const Gemini = (() => {
     };
 
     const tools = buildVertexTools_(cfg);
-    if (tools) payload.tools = tools;
+    if (tools) {
+      payload.tools = tools;
+      Log.info("Tools added to payload. Tool count:", tools.length);
+    } else {
+      Log.warn("No tools configured - retrieval/grounding will not be used");
+    }
 
     if (responseMimeType) {
       payload.generationConfig.responseMimeType = responseMimeType;
@@ -124,12 +144,37 @@ const Gemini = (() => {
     const code = res.getResponseCode();
     const text = res.getContentText();
     if (code < 200 || code >= 300) {
+      Log.error("Gemini Vertex API error response:", text);
       throw new Error(`Gemini API error ${code}: ${text}`);
     }
 
     const data = JSON.parse(text);
-    const parts = data?.candidates?.[0]?.content?.parts || [];
-    return parts.map(p => p.text || "").join("").trim();
+    
+    // Log full response for debugging (especially grounding metadata)
+    Log.debug("Gemini Vertex full response:", JSON.stringify(data, null, 2));
+    
+    // Check if grounding/retrieval was used
+    const candidate = data?.candidates?.[0];
+    if (candidate?.groundingMetadata) {
+      Log.info("Grounding metadata found:", JSON.stringify(candidate.groundingMetadata, null, 2));
+      const chunkIndices = candidate.groundingMetadata?.groundingChunks || [];
+      if (chunkIndices.length > 0) {
+        Log.info(`Grounding used: ${chunkIndices.length} chunks retrieved from data store`);
+      } else {
+        Log.warn("Grounding metadata present but no chunks retrieved - data store may be empty or query didn't match");
+      }
+    } else {
+      Log.warn("No grounding metadata in response - retrieval tool may not be working or data store is not configured");
+    }
+    
+    const parts = candidate?.content?.parts || [];
+    const responseText = parts.map(p => p.text || "").join("").trim();
+    
+    if (!responseText) {
+      Log.error("Empty response text from Gemini. Full response:", JSON.stringify(data, null, 2));
+    }
+    
+    return responseText;
   }
 
   function callLegacy_(cfg, system, user, extras, responseMimeType) {

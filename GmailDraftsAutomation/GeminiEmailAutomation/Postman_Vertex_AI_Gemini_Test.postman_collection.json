@@ -1,0 +1,175 @@
+{
+	"info": {
+		"_postman_id": "vertex-ai-gemini-test",
+		"name": "Vertex AI Gemini with Data Store Test",
+		"description": "Kolekcja do testowania API Vertex AI Gemini z grounding przez Vertex AI Search Data Store",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "Generate Content with Data Store",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer {{ACCESS_TOKEN}}",
+						"type": "text"
+					},
+					{
+						"key": "Content-Type",
+						"value": "application/json",
+						"type": "text"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"contents\": [\n    {\n      \"role\": \"user\",\n      \"parts\": [\n        {\n          \"text\": \"Jakie są główne tematy w historii mojej skrzynki mailowej?\"\n        }\n      ]\n    }\n  ],\n  \"systemInstruction\": {\n    \"role\": \"system\",\n    \"parts\": [\n      {\n        \"text\": \"You are Mateusz Janota's private email assistant trained on the history of his mailbox. Respond to emails on his behalf.\"\n      }\n    ]\n  },\n  \"tools\": [\n    {\n      \"retrieval\": {\n        \"vertexAiSearch\": {\n          \"datastore\": \"projects/{{PROJECT_ID}}/locations/{{LOCATION}}/collections/{{COLLECTION}}/dataStores/{{DATA_STORE_ID}}\"\n        }\n      }\n    }\n  ],\n  \"generationConfig\": {\n    \"temperature\": 0.2,\n    \"maxOutputTokens\": 1024\n  }\n}"
+				},
+				"url": {
+					"raw": "https://{{LOCATION}}-aiplatform.googleapis.com/v1/projects/{{PROJECT_ID}}/locations/{{LOCATION}}/publishers/{{PUBLISHER}}/models/{{MODEL}}:generateContent",
+					"protocol": "https",
+					"host": [
+						"{{LOCATION}}-aiplatform.googleapis.com"
+					],
+					"path": [
+						"v1",
+						"projects",
+						"{{PROJECT_ID}}",
+						"locations",
+						"{{LOCATION}}",
+						"publishers",
+						"{{PUBLISHER}}",
+						"models",
+						"{{MODEL}}:generateContent"
+					]
+				},
+				"description": "Test podstawowego wywołania z data store. Sprawdź:\n1. Czy odpowiedź zawiera informacje z data store\n2. Czy w odpowiedzi jest groundingMetadata\n3. Czy są jakieś błędy związane z retrieval"
+			},
+			"response": []
+		},
+		{
+			"name": "Generate Content WITHOUT Data Store",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer {{ACCESS_TOKEN}}",
+						"type": "text"
+					},
+					{
+						"key": "Content-Type",
+						"value": "application/json",
+						"type": "text"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"contents\": [\n    {\n      \"role\": \"user\",\n      \"parts\": [\n        {\n          \"text\": \"Jakie są główne tematy w historii mojej skrzynki mailowej?\"\n        }\n      ]\n    }\n  ],\n  \"systemInstruction\": {\n    \"role\": \"system\",\n    \"parts\": [\n      {\n        \"text\": \"You are Mateusz Janota's private email assistant trained on the history of his mailbox. Respond to emails on his behalf.\"\n      }\n    ]\n  },\n  \"generationConfig\": {\n    \"temperature\": 0.2,\n    \"maxOutputTokens\": 1024\n  }\n}"
+				},
+				"url": {
+					"raw": "https://{{LOCATION}}-aiplatform.googleapis.com/v1/projects/{{PROJECT_ID}}/locations/{{LOCATION}}/publishers/{{PUBLISHER}}/models/{{MODEL}}:generateContent",
+					"protocol": "https",
+					"host": [
+						"{{LOCATION}}-aiplatform.googleapis.com"
+					],
+					"path": [
+						"v1",
+						"projects",
+						"{{PROJECT_ID}}",
+						"locations",
+						"{{LOCATION}}",
+						"publishers",
+						"{{PUBLISHER}}",
+						"models",
+						"{{MODEL}}:generateContent"
+					]
+				},
+				"description": "Test porównawczy - wywołanie BEZ data store, żeby zobaczyć różnicę w odpowiedziach"
+			},
+			"response": []
+		},
+		{
+			"name": "Generate Content - Test Email Reply",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer {{ACCESS_TOKEN}}",
+						"type": "text"
+					},
+					{
+						"key": "Content-Type",
+						"value": "application/json",
+						"type": "text"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"contents\": [\n    {\n      \"role\": \"user\",\n      \"parts\": [\n        {\n          \"text\": \"CONTEXT:\\n- Retrieve the necessary knowledge from the configured Vertex AI RAG corpus.\\n- If the retrieval does not provide enough data, leave missing fields as [____] to be completed by a human.\\n\\nEMAIL SUBJECT: Test email\\n\\nEMAIL BODY: Witam, czy możesz mi pomóc z pytaniem dotyczącym naszych projektów?\"\n        }\n      ]\n    }\n  ],\n  \"systemInstruction\": {\n    \"role\": \"system\",\n    \"parts\": [\n      {\n        \"text\": \"You are Mateusz Janota's private email assistant trained on the history of his mailbox. Respond to emails on his behalf. Use only the provided context and the documents retrieved via Vertex AI RAG tools. Return ONLY valid JSON with keys {\\\"classification\\\":\\\"ready|template|ignored\\\",\\\"lang\\\":\\\"pl|en|other\\\",\\\"response\\\":string|null}.\"\n      }\n    ]\n  },\n  \"tools\": [\n    {\n      \"retrieval\": {\n        \"vertexAiSearch\": {\n          \"datastore\": \"projects/{{PROJECT_ID}}/locations/{{LOCATION}}/collections/{{COLLECTION}}/dataStores/{{DATA_STORE_ID}}\"\n        }\n      }\n    }\n  ],\n  \"generationConfig\": {\n    \"temperature\": 0.2,\n    \"maxOutputTokens\": 1024,\n    \"responseMimeType\": \"application/json\"\n  }\n}"
+				},
+				"url": {
+					"raw": "https://{{LOCATION}}-aiplatform.googleapis.com/v1/projects/{{PROJECT_ID}}/locations/{{LOCATION}}/publishers/{{PUBLISHER}}/models/{{MODEL}}:generateContent",
+					"protocol": "https",
+					"host": [
+						"{{LOCATION}}-aiplatform.googleapis.com"
+					],
+					"path": [
+						"v1",
+						"projects",
+						"{{PROJECT_ID}}",
+						"locations",
+						"{{LOCATION}}",
+						"publishers",
+						"{{PUBLISHER}}",
+						"models",
+						"{{MODEL}}:generateContent"
+					]
+				},
+				"description": "Test symulujący rzeczywiste wywołanie z aplikacji - format jak w kodzie"
+			},
+			"response": []
+		}
+	],
+	"variable": [
+		{
+			"key": "PROJECT_ID",
+			"value": "your-project-id",
+			"type": "string"
+		},
+		{
+			"key": "LOCATION",
+			"value": "europe-west3",
+			"type": "string"
+		},
+		{
+			"key": "PUBLISHER",
+			"value": "google",
+			"type": "string"
+		},
+		{
+			"key": "MODEL",
+			"value": "gemini-2.5-flash",
+			"type": "string"
+		},
+		{
+			"key": "DATA_STORE_ID",
+			"value": "your-datastore-id",
+			"type": "string"
+		},
+		{
+			"key": "COLLECTION",
+			"value": "default_collection",
+			"type": "string"
+		},
+		{
+			"key": "ACCESS_TOKEN",
+			"value": "your-access-token",
+			"type": "string",
+			"description": "OAuth2 access token. Możesz go uzyskać używając 'gcloud auth print-access-token' lub z Apps Script OAuthToken"
+		}
+	]
+}
+
