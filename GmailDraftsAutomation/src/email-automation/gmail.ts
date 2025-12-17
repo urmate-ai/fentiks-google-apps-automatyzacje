@@ -1,0 +1,349 @@
+import { gmail_v1, google } from 'googleapis';
+import { logger } from '../shared/logger/index.js';
+import { config } from '../shared/config/index.js';
+import { stripHtml } from '../shared/utils/index.js';
+import { createLLM } from './llm.js';
+import { RagService } from './rag.js';
+import { extractJson } from '../shared/utils/index.js';
+
+const PERSONAL_QUERY_PARTS = [
+  '-category:promotions',
+  '-category:social',
+  '-category:updates',
+  '-category:forums',
+  '-label:spam',
+  '-label:trash',
+  '-is:chat',
+  '-from:mailer-daemon',
+];
+
+export interface ClassificationResult {
+  classification: 'ready' | 'template' | 'ignored';
+  lang: 'pl' | 'en' | 'other';
+  response: string | null;
+}
+
+export class GmailService {
+  private gmail: gmail_v1.Gmail;
+  private llm: ReturnType<typeof createLLM>;
+  private ragService: RagService;
+
+  constructor(auth: any) {
+    this.gmail = google.gmail({ version: 'v1', auth });
+    this.llm = createLLM();
+    this.ragService = new RagService();
+  }
+
+  buildContext(_subject: string, _body: string): string {
+    return [
+      'Rules:',
+      '- Retrieve the necessary knowledge from the configured RAG corpus.',
+      '- If the retrieval does not provide enough data, leave missing fields as [____] to be completed by a human.',
+    ].join('\n');
+  }
+
+  async classifyAndReply(
+    subject: string,
+    body: string,
+    context: string
+  ): Promise<ClassificationResult> {
+    const ragContext = await this.ragService.retrieveContext(`${subject}\n\n${body}`);
+
+    const systemPrompt = [
+      config.systemContext ||
+        "You are Mateusz Janota's private email assistant trained on the history of his mailbox. Respond to emails on his behalf.",
+      'Use only the provided context and the documents retrieved via RAG.',
+      'Return ONLY valid JSON with keys {"classification":"ready|template|ignored","lang":"pl|en|other","response":string|null}.',
+      'If classification="ignored" then response must be null.',
+      'If "ready" create a full HTML reply in detected language.',
+      'If "template" create a brief HTML reply skeleton with [____] placeholders.',
+      'Do not use signature in the response. Signature is added by the script after the response is generated.',
+      'Always end the message politely with a closing phrase, such as "Z poważaniem," (for Polish) or "Best regards," (for English), but without any name or signature after it.',
+      'Use <br> for new lines. Placeholders must be exactly four underscores inside square brackets.',
+    ]
+      .filter(Boolean)
+      .join(' ');
+
+    const userPrompt = [
+      'CONTEXT:',
+      context,
+      '',
+      'RAG RETRIEVED CONTEXT:',
+      ragContext || '(No relevant context found)',
+      '',
+      'EMAIL SUBJECT:',
+      subject || '(no subject)',
+      '',
+      'EMAIL BODY:',
+      body || '(empty body)',
+    ].join('\n');
+
+    try {
+      const response = await this.llm.invoke([
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userPrompt },
+      ]);
+
+      const content = typeof response.content === 'string' ? response.content : '';
+      const jsonStr = extractJson(content);
+      const json = JSON.parse(jsonStr);
+
+      return {
+        classification: (json.classification || 'ignored') as 'ready' | 'template' | 'ignored',
+        lang: (json.lang || 'pl') as 'pl' | 'en' | 'other',
+        response: json.response ? String(json.response) : null,
+      };
+    } catch (error) {
+      logger.warn('LLM classification error', error);
+      return { classification: 'ignored', lang: 'pl', response: null };
+    }
+  }
+
+  async fetchCandidateThreads(limit: number = 5): Promise<gmail_v1.Schema$Thread[]> {
+    const query = [
+      'in:inbox',
+      'is:unread',
+      ...PERSONAL_QUERY_PARTS,
+      `-label:${config.gmailLabels.ready}`,
+      `-label:${config.gmailLabels.template}`,
+      `-label:${config.gmailLabels.failed}`,
+      config.gmailLabels.ignored ? `-label:${config.gmailLabels.ignored}` : '',
+      'newer_than:14d',
+    ]
+      .filter(Boolean)
+      .join(' ');
+
+    const response = await this.gmail.users.threads.list({
+      userId: 'me',
+      q: query,
+      maxResults: limit,
+    });
+
+    const threads = response.data.threads || [];
+    return threads.map((t) => t as gmail_v1.Schema$Thread);
+  }
+
+  async fetchFailedThreads(limit: number = 2): Promise<gmail_v1.Schema$Thread[]> {
+    const query = [
+      `label:${config.gmailLabels.failed}`,
+      'is:unread',
+      ...PERSONAL_QUERY_PARTS,
+      `-label:${config.gmailLabels.ready}`,
+      `-label:${config.gmailLabels.template}`,
+      config.gmailLabels.ignored ? `-label:${config.gmailLabels.ignored}` : '',
+      'newer_than:14d',
+    ]
+      .filter(Boolean)
+      .join(' ');
+
+    const response = await this.gmail.users.threads.list({
+      userId: 'me',
+      q: query,
+      maxResults: limit,
+    });
+
+    const threads = response.data.threads || [];
+    return threads.map((t) => t as gmail_v1.Schema$Thread);
+  }
+
+  async threadHasDraft(threadId: string): Promise<boolean> {
+    try {
+      const thread = await this.gmail.users.threads.get({
+        userId: 'me',
+        id: threadId,
+        format: 'full',
+      });
+
+      const messages = thread.data.messages || [];
+      return messages.some((msg) => msg.labelIds?.includes('DRAFT') ?? false);
+    } catch {
+      return false;
+    }
+  }
+
+  async processThread(threadId: string): Promise<void> {
+    try {
+      const thread = await this.gmail.users.threads.get({
+        userId: 'me',
+        id: threadId,
+        format: 'full',
+      });
+
+      const messages = thread.data.messages || [];
+      if (messages.length === 0) return;
+
+      // Get the latest message
+      const latestMessage = messages[messages.length - 1];
+      if (!latestMessage.id) return;
+
+      const message = await this.gmail.users.messages.get({
+        userId: 'me',
+        id: latestMessage.id,
+        format: 'full',
+      });
+
+      const headers = message.data.payload?.headers || [];
+      const subject =
+        headers.find((h) => h.name?.toLowerCase() === 'subject')?.value || '(no subject)';
+      const from = headers.find((h) => h.name?.toLowerCase() === 'from')?.value || '';
+
+      if (
+        /no[-]?reply|do[-]?not[-]?reply|donotreply/i.test(from) ||
+        /(alert|notification)/i.test(subject)
+      ) {
+        await this.addLabel(threadId, config.gmailLabels.ignored);
+        return;
+      }
+
+      const bodyText = this.extractBodyText(message.data);
+      const bodyPlain = stripHtml(bodyText);
+
+      const context = this.buildContext(subject, bodyPlain);
+
+      const result = await this.classifyAndReply(subject, bodyPlain, context);
+      logger.info('Classification result', result);
+
+      if (result.classification === 'ignored' || !result.response) {
+        await this.addLabel(threadId, config.gmailLabels.ignored);
+        return;
+      }
+
+      const html = this.postProcessResponse(result.response, result.lang);
+
+      const hasPlaceholders = /\[<span[^>]*>____<\/span>\]/.test(html);
+      const needHuman = result.classification !== 'ready' || hasPlaceholders;
+      
+      await this.createDraftReply(threadId, html);
+
+      if (needHuman) {
+        await this.addLabel(threadId, config.gmailLabels.template);
+        await this.removeLabel(threadId, config.gmailLabels.ready);
+      } else {
+        await this.addLabel(threadId, config.gmailLabels.ready);
+        await this.removeLabel(threadId, config.gmailLabels.template);
+      }
+    } catch (error) {
+      logger.error(`Error processing thread ${threadId}`, error);
+      await this.addLabel(threadId, config.gmailLabels.failed);
+      throw error;
+    }
+  }
+
+  private extractBodyText(message: gmail_v1.Schema$Message): string {
+    const payload = message.payload;
+    if (!payload) return '';
+
+    const extractFromPart = (part: gmail_v1.Schema$MessagePart): string => {
+      if (part.body?.data) {
+        return Buffer.from(part.body.data, 'base64').toString('utf-8');
+      }
+      if (part.parts) {
+        return part.parts.map((p) => extractFromPart(p)).join('\n');
+      }
+      return '';
+    };
+
+    return extractFromPart(payload);
+  }
+
+  private postProcessResponse(raw: string, lang: string): string {
+    const signature =
+      lang && lang.toLowerCase().startsWith('en') ? config.signatures.en : config.signatures.pl;
+
+    const cleaned = (raw || '')
+      .trim()
+      .replace(/^```(?:html)?\n?/i, '')
+      .replace(/```$/i, '')
+      .trim();
+
+    const sanitized = cleaned.replace(/\[____[^\]]*\]/g, '[____]');
+
+    const withSig = sanitized.includes(signature)
+      ? sanitized
+      : sanitized + (sanitized.endsWith('<br>') ? '' : '<br><br>') + signature;
+
+    const withPlaceholders = withSig.replace(
+      /\[____[^\]]*\]/g,
+      '[<span style="background-color: rgb(0, 255, 255);">____</span>]'
+    );
+
+    return withPlaceholders;
+  }
+
+  private async createDraftReply(threadId: string, htmlBody: string): Promise<void> {
+    const thread = await this.gmail.users.threads.get({
+      userId: 'me',
+      id: threadId,
+      format: 'minimal',
+    });
+
+    const messages = thread.data.messages || [];
+    if (messages.length === 0) return;
+
+    const latestMessageId = messages[messages.length - 1].id;
+    if (!latestMessageId) return;
+
+    const raw = [
+      `In-Reply-To: <${latestMessageId}@mail.gmail.com>`,
+      `References: <${latestMessageId}@mail.gmail.com>`,
+      'Content-Type: text/html; charset=utf-8',
+      '',
+      htmlBody,
+    ].join('\n');
+
+    const encoded = Buffer.from(raw)
+      .toString('base64')
+      .replace(/\+/g, '-')
+      .replace(/\//g, '_')
+      .replace(/=+$/, '');
+
+    await this.gmail.users.drafts.create({
+      userId: 'me',
+      requestBody: {
+        message: {
+          threadId,
+          raw: encoded,
+        },
+      },
+    });
+  }
+
+  private async addLabel(threadId: string, labelName: string): Promise<void> {
+    try {
+      const labels = await this.gmail.users.labels.list({ userId: 'me' });
+      const label = labels.data.labels?.find((l) => l.name === labelName);
+
+      if (label && label.id) {
+        await this.gmail.users.threads.modify({
+          userId: 'me',
+          id: threadId,
+          requestBody: {
+            addLabelIds: [label.id],
+          },
+        });
+      }
+    } catch (error) {
+      logger.warn(`Failed to add label ${labelName}`, error);
+    }
+  }
+
+  private async removeLabel(threadId: string, labelName: string): Promise<void> {
+    try {
+      const labels = await this.gmail.users.labels.list({ userId: 'me' });
+      const label = labels.data.labels?.find((l) => l.name === labelName);
+
+      if (label && label.id) {
+        await this.gmail.users.threads.modify({
+          userId: 'me',
+          id: threadId,
+          requestBody: {
+            removeLabelIds: [label.id],
+          },
+        });
+      }
+    } catch (error) {
+      logger.warn(`Failed to remove label ${labelName}`, error);
+    }
+  }
+}
+

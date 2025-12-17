@@ -1,0 +1,53 @@
+{
+  "name": "gmail-drafts-automation",
+  "version": "2.0.0",
+  "description": "Automatyzacja odpowiedzi na maile z użyciem LangChain i pgvector",
+  "type": "module",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "tsx watch src/index.ts",
+    "test": "jest",
+    "lint": "eslint src --ext .ts",
+    "format": "prettier --write \"src/**/*.ts\"",
+    "oauth:setup": "tsx src/auth/oauth-setup.ts",
+    "rag:refresh": "npm run build && node dist/index.js --rag-refresh",
+    "email:automation": "npm run build && node dist/index.js --email-automation",
+    "run:all": "npm run build && node dist/index.js --all"
+  },
+  "keywords": [
+    "gmail",
+    "automation",
+    "langchain",
+    "rag",
+    "pgvector"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@langchain/core": "^0.3.0",
+    "@langchain/openai": "^0.3.0",
+    "@langchain/community": "^0.3.0",
+    "pg": "^8.11.3",
+    "pgvector": "^0.1.8",
+    "googleapis": "^128.0.0",
+    "@google/generative-ai": "^0.21.0",
+    "dotenv": "^16.4.5",
+    "winston": "^3.11.0",
+    "zod": "^3.22.4"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "@types/pg": "^8.10.9",
+    "@typescript-eslint/eslint-plugin": "^6.19.0",
+    "@typescript-eslint/parser": "^6.19.0",
+    "eslint": "^8.56.0",
+    "jest": "^29.7.0",
+    "prettier": "^3.2.4",
+    "ts-jest": "^29.1.1",
+    "tsx": "^4.7.0",
+    "typescript": "^5.3.3"
+  }
+}
+
