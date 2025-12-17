@@ -42,6 +42,46 @@ export class GmailService {
     ].join('\n');
   }
 
+  async isQuoteRequest(subject: string, body: string): Promise<boolean> {
+    const prompt = `Analyze the following email and determine if it is a quote request or pricing inquiry (zapytanie ofertowe/zapytanie cenowe).
+
+Email subject: ${subject}
+Email body: ${body}
+
+Respond with ONLY a JSON object: {"isQuoteRequest": true|false}
+
+A quote request is an email asking for:
+- Price, cost, estimate, quotation, offer (cena, koszt, wycena, oferta)
+- Budget information (informacje o budżecie)
+- Project pricing (wycena projektu)
+- Service costs (koszty usług)
+- Product pricing (ceny produktów)
+- Request for quote (RFQ)
+- Any inquiry about costs or pricing
+
+Do NOT consider as quote requests:
+- General questions
+- Support requests
+- Meeting requests
+- Information requests that don't involve pricing`;
+
+    try {
+      const response = await this.llm.invoke([
+        { role: 'system', content: 'You are a helpful assistant that analyzes emails. Always respond with valid JSON only.' },
+        { role: 'user', content: prompt },
+      ]);
+
+      const content = typeof response.content === 'string' ? response.content : '';
+      const jsonStr = extractJson(content);
+      const json = JSON.parse(jsonStr);
+
+      return Boolean(json.isQuoteRequest);
+    } catch (error) {
+      logger.warn('Error detecting quote request, defaulting to false', error);
+      return false;
+    }
+  }
+
   async classifyAndReply(
     subject: string,
     body: string,
@@ -197,6 +237,12 @@ export class GmailService {
 
       const bodyText = this.extractBodyText(message.data);
       const bodyPlain = stripHtml(bodyText);
+
+      // Sprawdź czy to zapytanie ofertowe używając AI
+      const isQuote = await this.isQuoteRequest(subject, bodyPlain);
+      if (isQuote) {
+        logger.info('To jest zapytanie ofertowe', { subject, threadId });
+      }
 
       const context = this.buildContext(subject, bodyPlain);
 
