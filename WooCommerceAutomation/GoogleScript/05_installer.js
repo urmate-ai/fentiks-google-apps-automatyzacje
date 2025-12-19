@@ -456,8 +456,10 @@ function generateMenuCode() {
     '    SpreadsheetApp.getUi().createMenu("Automatyzacja WooCommerce")',
     '      .addItem("Dodaj kontakty do WooCommerce", "dodajKontaktyDoWooCommerce")',
     '      .addSeparator()',
-    '      .addItem("📊 Sprawdź status", "checkStatus")',
-    '      .addToUi();',
+      '      .addItem("📊 Sprawdź status", "checkStatus")',
+      '      .addSeparator()',
+      '      .addItem("Wygeneruj certyfikat ukończenia kursu", "generateCertificate")',
+      '      .addToUi();',
     '  } catch (err) {',
     '    Logger.log("[INFO] UI not available for menu creation: " + err);',
     '  }',
@@ -517,7 +519,23 @@ function logError(message, error) {
 
 function getSheetData() {
   var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
-  return sheet.getDataRange().getValues();
+  var values = sheet.getDataRange().getValues();
+  
+  if (!values || values.length === 0) return [];
+  
+  var header = values.slice(0, 3);
+  var rest = values.slice(3);
+  
+  var filtered = rest.filter(function(row) {
+    for (var i = 0; i < row.length; i++) {
+      var v = row[i];
+      if (v === 0) return true;
+      if (v != null && String(v).trim() !== "") return true;
+    }
+    return false;
+  });
+  
+  return header.concat(filtered);
 }
 
 function dodajKontaktyDoWooCommerce() {
@@ -561,5 +579,280 @@ function dodajKontaktyDoWooCommerce() {
   } catch (e) {
     SpreadsheetApp.getUi().alert("❌ Błąd wysyłki: " + e.toString());
   }
+}
+
+function generateCertificate() {
+  try {
+    var htmlOutput = HtmlService.createHtmlOutput(
+      '<!DOCTYPE html>' +
+      '<html>' +
+      '  <head>' +
+      '    <base target="_top">' +
+      '    <style>' +
+      '      body { font-family: Arial, sans-serif; padding: 20px; max-width: 500px; }' +
+      '      .form-group { margin-bottom: 15px; }' +
+      '      label { display: block; margin-bottom: 5px; font-weight: bold; }' +
+      '      input[type="text"], textarea { width: 100%; padding: 8px; box-sizing: border-box; border: 1px solid #ccc; border-radius: 4px; }' +
+      '      textarea { min-height: 80px; resize: vertical; }' +
+      '      .button-group { margin-top: 20px; text-align: right; }' +
+      '      button { padding: 10px 20px; margin-left: 10px; cursor: pointer; border: none; border-radius: 4px; }' +
+      '      .btn-primary { background-color: #4285f4; color: white; }' +
+      '      .btn-secondary { background-color: #f1f1f1; color: #333; }' +
+      '      button:hover { opacity: 0.8; }' +
+      '    </style>' +
+      '  </head>' +
+      '  <body>' +
+      '    <h2>Generowanie certyfikatu ukończenia kursu</h2>' +
+      '    <form id="certificateForm">' +
+      '      <div class="form-group">' +
+      '        <label for="courseName">Nazwa kursu:</label>' +
+      '        <input type="text" id="courseName" name="courseName" required>' +
+      '      </div>' +
+      '      <div class="form-group">' +
+      '        <label for="hours">Wymiar godzin:</label>' +
+      '        <input type="text" id="hours" name="hours" required>' +
+      '      </div>' +
+      '      <div class="form-group">' +
+      '        <label for="instructor">Prowadzący:</label>' +
+      '        <input type="text" id="instructor" name="instructor" required>' +
+      '      </div>' +
+      '      <div class="form-group">' +
+      '        <label for="locationDate">Miejscowość, data:</label>' +
+      '        <input type="text" id="locationDate" name="locationDate" required>' +
+      '      </div>' +
+      '      <div class="form-group">' +
+      '        <label for="regulation">Rozporządzenie:</label>' +
+      '        <textarea id="regulation" name="regulation" required>Zaświadczenie wydano na podstawie § 23 ust.3 rozporządzenia Ministra Edukacji Narodowej z dnia 6 października 2023 r. w sprawie kształcenia ustawicznego w formach pozaszkolnych (Dz.U. 2023 poz. 2175).</textarea>' +
+      '      </div>' +
+      '      <div class="button-group">' +
+      '        <button type="button" class="btn-secondary" onclick="google.script.host.close()">Anuluj</button>' +
+      '        <button type="submit" class="btn-primary">Generuj</button>' +
+      '      </div>' +
+      '    </form>' +
+      '    <script>' +
+      '      document.getElementById("certificateForm").addEventListener("submit", function(e) {' +
+      '        e.preventDefault();' +
+      '        var formData = {' +
+      '          courseName: document.getElementById("courseName").value,' +
+      '          hours: document.getElementById("hours").value,' +
+      '          instructor: document.getElementById("instructor").value,' +
+      '          locationDate: document.getElementById("locationDate").value,' +
+      '          regulation: document.getElementById("regulation").value' +
+      '        };' +
+      '        google.script.run' +
+      '          .withSuccessHandler(function() { google.script.host.close(); })' +
+      '          .withFailureHandler(function(error) { alert("Błąd: " + error.message); })' +
+      '          .processCertificateData(formData);' +
+      '      });' +
+      '    </script>' +
+      '  </body>' +
+      '</html>'
+    )
+      .setWidth(550)
+      .setHeight(500);
+    
+    SpreadsheetApp.getUi().showModalDialog(htmlOutput, "Generowanie certyfikatu");
+  } catch (e) {
+    SpreadsheetApp.getUi().alert("❌ Błąd otwierania formularza: " + e.toString());
+    logError("Błąd podczas otwierania formularza certyfikatu", e);
+  }
+}
+
+function processCertificateData(data) {
+  try {
+    var sheetData = getSheetData();
+    
+    if (!sheetData || sheetData.length < 4) {
+      SpreadsheetApp.getUi().alert("❌ Brak danych w arkuszu. Arkusz musi zawierać nagłówki i dane uczestników.");
+      return;
+    }
+
+    var headerRows = sheetData.slice(0, 3);
+    var dataRows = sheetData.slice(3);
+    
+    var columnIndices = findColumnIndices(headerRows);
+    
+    if (columnIndices.firstName === null && columnIndices.lastName === null) {
+      SpreadsheetApp.getUi().alert("❌ Nie znaleziono wymaganych kolumn w arkuszu.\\n\\nSzukane kolumny: Imię, Nazwisko");
+      return;
+    }
+
+    var processedCount = 0;
+    
+    for (var i = 0; i < dataRows.length; i++) {
+      var row = dataRows[i];
+      
+      if (!row || row.length === 0) continue;
+      
+      var lpValue = null;
+      var birthDateValue = null;
+      var birthPlaceValue = null;
+      
+      if (row[0] !== null && row[0] !== undefined && String(row[0]).trim() !== "") {
+        lpValue = String(row[0]).trim();
+      } else {
+        for (var j = Math.max(0, i - 3); j < i; j++) {
+          var prevRow = dataRows[j];
+          if (prevRow && prevRow[0] !== null && prevRow[0] !== undefined && String(prevRow[0]).trim() !== "") {
+            lpValue = String(prevRow[0]).trim();
+            break;
+          }
+        }
+      }
+      
+      if (row[49] !== null && row[49] !== undefined && row[49] !== "") {
+        birthDateValue = row[49];
+      } else {
+        for (var j = Math.max(0, i - 3); j < i; j++) {
+          var prevRow = dataRows[j];
+          if (prevRow && prevRow[49] !== null && prevRow[49] !== undefined && prevRow[49] !== "") {
+            birthDateValue = prevRow[49];
+            break;
+          }
+        }
+      }
+      
+      if (row[50] !== null && row[50] !== undefined && String(row[50]).trim() !== "") {
+        birthPlaceValue = String(row[50]).trim();
+      } else {
+        for (var j = Math.max(0, i - 3); j < i; j++) {
+          var prevRow = dataRows[j];
+          if (prevRow && prevRow[50] !== null && prevRow[50] !== undefined && String(prevRow[50]).trim() !== "") {
+            birthPlaceValue = String(prevRow[50]).trim();
+            break;
+          }
+        }
+      }
+      
+      var personData = extractPersonData(row, columnIndices, i + 4, lpValue, birthDateValue, birthPlaceValue);
+      
+      if (!personData.firstName && !personData.lastName) {
+        continue;
+      }
+      
+      processedCount++;
+      
+      var alertMessage = 
+        "========================================\\n" +
+        "CERTYFIKAT - OSOBA #" + processedCount + "\\n" +
+        "========================================\\n" +
+        "Numer LP: " + (personData.lp || "Brak") + "\\n" +
+        "Imię: " + (personData.firstName || "Brak") + "\\n" +
+        "Nazwisko: " + (personData.lastName || "Brak") + "\\n" +
+        "PESEL: " + (personData.pesel || "Brak") + "\\n" +
+        "Miejsce urodzenia: " + (personData.birthPlace || "Brak") + "\\n" +
+        "Data urodzenia: " + (personData.birthDate || "Brak") + "\\n" +
+        "---\\n" +
+        "Nazwa kursu: " + data.courseName + "\\n" +
+        "Wymiar godzin: " + data.hours + "\\n" +
+        "Prowadzący: " + data.instructor + "\\n" +
+        "Miejscowość, data: " + data.locationDate + "\\n" +
+        "Rozporządzenie: " + data.regulation + "\\n" +
+        "========================================";
+      
+      SpreadsheetApp.getUi().alert(alertMessage);
+    }
+    
+    if (processedCount === 0) {
+      SpreadsheetApp.getUi().alert("⚠️ Nie znaleziono żadnych danych osobowych w arkuszu.");
+    } else {
+      SpreadsheetApp.getUi().alert("✅ Przetworzono " + processedCount + " " + (processedCount === 1 ? "osobę" : "osób") + ".");
+    }
+  } catch (e) {
+    logError("Błąd podczas przetwarzania danych certyfikatu", e);
+    SpreadsheetApp.getUi().alert("❌ Błąd: " + e.toString());
+    throw e;
+  }
+}
+
+function findColumnIndices(headerRows) {
+  var indices = {
+    lp: 0,
+    firstName: null,
+    lastName: null,
+    pesel: 3,
+    birthPlace: 50,
+    birthDate: 49
+  };
+  
+  for (var rowIdx = 0; rowIdx < headerRows.length; rowIdx++) {
+    var row = headerRows[rowIdx] || [];
+    
+    for (var colIdx = 0; colIdx < row.length; colIdx++) {
+      var headerValue = String(row[colIdx] || "").toLowerCase().trim();
+      
+      if (!indices.firstName && (headerValue.indexOf("imię") !== -1 || headerValue.indexOf("imie") !== -1 || headerValue === "firstname" || headerValue === "first_name" || headerValue === "name")) {
+        indices.firstName = colIdx;
+      }
+      
+      if (!indices.lastName && (headerValue.indexOf("nazwisko") !== -1 || headerValue === "lastname" || headerValue === "last_name" || headerValue === "surname")) {
+        indices.lastName = colIdx;
+      }
+    }
+  }
+  
+  return indices;
+}
+
+function extractPersonData(row, columnIndices, rowNumber, lpValue, birthDateValue, birthPlaceValue) {
+  lpValue = lpValue || null;
+  birthDateValue = birthDateValue || null;
+  birthPlaceValue = birthPlaceValue || null;
+  
+  function getValue(index) {
+    if (index === null || index === undefined) return null;
+    var value = row[index];
+    if (value === null || value === undefined || value === "") return null;
+    return String(value).trim();
+  }
+  
+  function formatDate(dateValue) {
+    if (!dateValue) return null;
+    
+    if (typeof dateValue === "string") {
+      return dateValue.trim();
+    }
+    
+    if (dateValue instanceof Date) {
+      var day = String(dateValue.getDate());
+      if (day.length === 1) day = "0" + day;
+      var month = String(dateValue.getMonth() + 1);
+      if (month.length === 1) month = "0" + month;
+      var year = dateValue.getFullYear();
+      return day + "." + month + "." + year;
+    }
+    
+    try {
+      var date = new Date(dateValue);
+      if (!isNaN(date.getTime())) {
+        var day = String(date.getDate());
+        if (day.length === 1) day = "0" + day;
+        var month = String(date.getMonth() + 1);
+        if (month.length === 1) month = "0" + month;
+        var year = date.getFullYear();
+        return day + "." + month + "." + year;
+      }
+    } catch (e) {
+    }
+    
+    return String(dateValue).trim();
+  }
+  
+  var rawBirthDate = birthDateValue;
+  if (!rawBirthDate && columnIndices.birthDate !== null) {
+    var dateValue = row[columnIndices.birthDate];
+    if (dateValue !== null && dateValue !== undefined && dateValue !== "") {
+      rawBirthDate = dateValue;
+    }
+  }
+  
+  return {
+    lp: lpValue || (columnIndices.lp !== null ? getValue(columnIndices.lp) : String(rowNumber)),
+    firstName: getValue(columnIndices.firstName),
+    lastName: getValue(columnIndices.lastName),
+    pesel: getValue(columnIndices.pesel),
+    birthPlace: birthPlaceValue || getValue(columnIndices.birthPlace),
+    birthDate: formatDate(rawBirthDate)
+  };
 }`.trim();
 }
