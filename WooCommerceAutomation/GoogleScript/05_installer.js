@@ -641,10 +641,8 @@ function generateCertificate() {
       '          locationDate: document.getElementById("locationDate").value,' +
       '          regulation: document.getElementById("regulation").value' +
       '        };' +
-      '        google.script.run' +
-      '          .withSuccessHandler(function() { google.script.host.close(); })' +
-      '          .withFailureHandler(function(error) { alert("Błąd: " + error.message); })' +
-      '          .processCertificateData(formData);' +
+      '        google.script.host.close();' +
+      '        google.script.run.processCertificateData(formData);' +
       '      });' +
       '    </script>' +
       '  </body>' +
@@ -661,6 +659,8 @@ function generateCertificate() {
 }
 
 function processCertificateData(data) {
+  SpreadsheetApp.getUi().alert("⏳ Generowanie certyfikatów...\\n\\nProszę czekać...");
+  
   try {
     var sheetData = getSheetData();
     
@@ -680,6 +680,8 @@ function processCertificateData(data) {
     }
 
     var processedCount = 0;
+    var successCount = 0;
+    var errorCount = 0;
     
     for (var i = 0; i < dataRows.length; i++) {
       var row = dataRows[i];
@@ -735,19 +737,27 @@ function processCertificateData(data) {
       processedCount++;
       
       try {
-        var result = generateCertificateDocument(personData, data, processedCount);
-        SpreadsheetApp.getUi().alert("✅ Osoba #" + processedCount + "/" + dataRows.length + "\\n" + personData.firstName + " " + personData.lastName + "\\n\\nDokument: " + result.fileName + "\\nDoc ID: " + result.docId + "\\nPDF ID: " + result.pdfId);
+        generateCertificateDocument(personData, data, processedCount);
+        successCount++;
       } catch (docError) {
+        errorCount++;
         var errorMsg = docError.toString();
         logError("Błąd podczas generowania dokumentu dla osoby #" + processedCount + " (" + personData.firstName + " " + personData.lastName + "):", docError);
-        SpreadsheetApp.getUi().alert("❌ Błąd podczas generowania dokumentu dla osoby #" + processedCount + ":\\n" + personData.firstName + " " + personData.lastName + "\\n\\nBłąd: " + errorMsg);
       }
     }
+    
+    var feedback = "✅ Generowanie zakończone!\\n\\n";
+    feedback += "Przetworzono: " + processedCount + " " + (processedCount === 1 ? "osobę" : "osób") + "\\n";
+    feedback += "Sukces: " + successCount + "\\n";
+    if (errorCount > 0) {
+      feedback += "Błędy: " + errorCount + "\\n";
+    }
+    feedback += "\\nWszystkie dokumenty zostały zapisane w folderze arkusza.";
     
     if (processedCount === 0) {
       SpreadsheetApp.getUi().alert("⚠️ Nie znaleziono żadnych danych osobowych w arkuszu.");
     } else {
-      SpreadsheetApp.getUi().alert("✅ Przetworzono " + processedCount + " " + (processedCount === 1 ? "osobę" : "osób") + ".\\n\\nWszystkie dokumenty zostały wygenerowane.");
+      SpreadsheetApp.getUi().alert(feedback);
     }
   } catch (e) {
     logError("Błąd podczas przetwarzania danych certyfikatu", e);
@@ -919,7 +929,7 @@ function generateCertificateDocument(personData, formData, personNumber) {
     pdfFile.setName(fileName + ".pdf");
     debugMessages.push("📄 Utworzono PDF: " + pdfFile.getName());
     
-    SpreadsheetApp.getUi().alert("🔍 DEBUG - Generowanie dokumentu\\n\\n" + debugMessages.join("\\n"));
+    logInfo("DEBUG - Generowanie dokumentu:\\n" + debugMessages.join("\\n"));
     
     return {
       docId: newFile.getId(),
