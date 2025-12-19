@@ -10,7 +10,8 @@ function getConfig() {
     TUTOR_API_URL: scriptProperties.getProperty('TUTOR_API_URL') || "",
     TUTOR_API_KEY: scriptProperties.getProperty('TUTOR_API_KEY') || "",
     TUTOR_PRIVATE_API_KEY: scriptProperties.getProperty('TUTOR_PRIVATE_API_KEY') || "",
-    PROXY_BASE_URL: scriptProperties.getProperty('PROXY_BASE_URL') || ""
+    PROXY_BASE_URL: scriptProperties.getProperty('PROXY_BASE_URL') || "",
+    DOC_TEMPLATE_ID: scriptProperties.getProperty('DOC_TEMPLATE_ID') || ""
   };
 }
 

@@ -296,31 +296,17 @@ function processCertificateData(data) {
       
       processedCount++;
       
-      const alertMessage = 
-        "========================================\n" +
-        `CERTYFIKAT - OSOBA #${processedCount}\n` +
-        "========================================\n" +
-        `Numer LP: ${personData.lp || "Brak"}\n` +
-        `Imię: ${personData.firstName || "Brak"}\n` +
-        `Nazwisko: ${personData.lastName || "Brak"}\n` +
-        `PESEL: ${personData.pesel || "Brak"}\n` +
-        `Miejsce urodzenia: ${personData.birthPlace || "Brak"}\n` +
-        `Data urodzenia: ${personData.birthDate || "Brak"}\n` +
-        "---\n" +
-        `Nazwa kursu: ${data.courseName}\n` +
-        `Wymiar godzin: ${data.hours}\n` +
-        `Prowadzący: ${data.instructor}\n` +
-        `Miejscowość, data: ${data.locationDate}\n` +
-        `Rozporządzenie: ${data.regulation}\n` +
-        "========================================";
-      
-      SpreadsheetApp.getUi().alert(alertMessage);
+      try {
+        generateCertificateDocument(personData, data, processedCount);
+      } catch (docError) {
+        logError(`Błąd podczas generowania dokumentu dla osoby #${processedCount} (${personData.firstName} ${personData.lastName}):`, docError);
+      }
     }
     
     if (processedCount === 0) {
       SpreadsheetApp.getUi().alert("⚠️ Nie znaleziono żadnych danych osobowych w arkuszu.");
     } else {
-      SpreadsheetApp.getUi().alert(`✅ Przetworzono ${processedCount} ${processedCount === 1 ? 'osobę' : 'osób'}.`);
+      SpreadsheetApp.getUi().alert(`✅ Wygenerowano ${processedCount} ${processedCount === 1 ? 'zaświadczenie' : 'zaświadczeń'}.\n\nPliki zostały zapisane w tym samym folderze co arkusz.`);
     }
   } catch (e) {
     logError("Błąd podczas przetwarzania danych certyfikatu", e);
@@ -410,4 +396,61 @@ function extractPersonData(row, columnIndices, rowNumber, lpValue = null, birthD
     birthPlace: birthPlaceValue || getValue(columnIndices.birthPlace),
     birthDate: formatDate(rawBirthDate)
   };
+}
+
+function generateCertificateDocument(personData, formData, personNumber) {
+  const config = getConfig();
+  
+  if (!config.DOC_TEMPLATE_ID) {
+    throw new Error("Brak DOC_TEMPLATE_ID w konfiguracji. Ustaw DOC_TEMPLATE_ID w Properties Service.");
+  }
+  
+  try {
+    const templateFile = DriveApp.getFileById(config.DOC_TEMPLATE_ID);
+    
+    const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+    const spreadsheetFile = DriveApp.getFileById(spreadsheet.getId());
+    const parentFolders = spreadsheetFile.getParents();
+    const targetFolder = parentFolders.hasNext() ? parentFolders.next() : DriveApp.getRootFolder();
+    
+    const fileName = `${personData.firstName || ""} ${personData.lastName || ""} zaświadczenie`.trim();
+    
+    const newFile = templateFile.makeCopy(fileName, targetFolder);
+    const newDoc = DocumentApp.openById(newFile.getId());
+    const body = newDoc.getBody();
+    
+    const replacements = {
+      'name': `${personData.firstName || ""} ${personData.lastName || ""}`.trim() || "Brak",
+      'dateOfBrith': personData.birthDate || "Brak",
+      'id': personData.pesel || "Brak",
+      'curseName': formData.courseName || "Brak",
+      'hours': formData.hours || "Brak",
+      'teacher': formData.instructor || "Brak",
+      'nr': personData.lp || "Brak",
+      'cityAndData': formData.locationDate || "Brak",
+      'city': personData.birthPlace || "Brak",
+      'roz': formData.regulation || "Brak"
+    };
+    
+    for (const [placeholder, value] of Object.entries(replacements)) {
+      body.replaceText(placeholder, value);
+    }
+    
+    newDoc.saveAndClose();
+    
+    const pdfBlob = newFile.getAs('application/pdf');
+    const pdfFile = targetFolder.createFile(pdfBlob);
+    pdfFile.setName(`${fileName}.pdf`);
+    
+    logInfo(`Wygenerowano dokumenty dla: ${personData.firstName} ${personData.lastName} (${fileName})`);
+    
+    return {
+      docId: newFile.getId(),
+      pdfId: pdfFile.getId(),
+      fileName: fileName
+    };
+  } catch (e) {
+    logError("Błąd podczas generowania dokumentu", e);
+    throw e;
+  }
 }

@@ -476,7 +476,8 @@ function generateMenuCode() {
     '    TUTOR_API_URL: scriptProperties.getProperty("TUTOR_API_URL") || "",',
     '    TUTOR_API_KEY: scriptProperties.getProperty("TUTOR_API_KEY") || "",',
     '    TUTOR_PRIVATE_API_KEY: scriptProperties.getProperty("TUTOR_PRIVATE_API_KEY") || "",',
-    '    PROXY_BASE_URL: scriptProperties.getProperty("PROXY_BASE_URL") || "https://fentiksapi.onrender.com"',
+    '    PROXY_BASE_URL: scriptProperties.getProperty("PROXY_BASE_URL") || "https://fentiksapi.onrender.com",',
+    '    DOC_TEMPLATE_ID: scriptProperties.getProperty("DOC_TEMPLATE_ID") || ""',
     '  };',
     '}',
     '',
@@ -505,7 +506,8 @@ function generateScriptCode(config) {
 function getConfig() {
   var scriptProperties = PropertiesService.getScriptProperties();
   return {
-    PROXY_BASE_URL: scriptProperties.getProperty("PROXY_BASE_URL") || "https://fentiksapi.onrender.com"
+    PROXY_BASE_URL: scriptProperties.getProperty("PROXY_BASE_URL") || "https://fentiksapi.onrender.com",
+    DOC_TEMPLATE_ID: scriptProperties.getProperty("DOC_TEMPLATE_ID") || ""
   };
 }
 
@@ -732,31 +734,17 @@ function processCertificateData(data) {
       
       processedCount++;
       
-      var alertMessage = 
-        "========================================\\n" +
-        "CERTYFIKAT - OSOBA #" + processedCount + "\\n" +
-        "========================================\\n" +
-        "Numer LP: " + (personData.lp || "Brak") + "\\n" +
-        "Imię: " + (personData.firstName || "Brak") + "\\n" +
-        "Nazwisko: " + (personData.lastName || "Brak") + "\\n" +
-        "PESEL: " + (personData.pesel || "Brak") + "\\n" +
-        "Miejsce urodzenia: " + (personData.birthPlace || "Brak") + "\\n" +
-        "Data urodzenia: " + (personData.birthDate || "Brak") + "\\n" +
-        "---\\n" +
-        "Nazwa kursu: " + data.courseName + "\\n" +
-        "Wymiar godzin: " + data.hours + "\\n" +
-        "Prowadzący: " + data.instructor + "\\n" +
-        "Miejscowość, data: " + data.locationDate + "\\n" +
-        "Rozporządzenie: " + data.regulation + "\\n" +
-        "========================================";
-      
-      SpreadsheetApp.getUi().alert(alertMessage);
+      try {
+        generateCertificateDocument(personData, data, processedCount);
+      } catch (docError) {
+        logError("Błąd podczas generowania dokumentu dla osoby #" + processedCount + " (" + personData.firstName + " " + personData.lastName + "):", docError);
+      }
     }
     
     if (processedCount === 0) {
       SpreadsheetApp.getUi().alert("⚠️ Nie znaleziono żadnych danych osobowych w arkuszu.");
     } else {
-      SpreadsheetApp.getUi().alert("✅ Przetworzono " + processedCount + " " + (processedCount === 1 ? "osobę" : "osób") + ".");
+      SpreadsheetApp.getUi().alert("✅ Wygenerowano " + processedCount + " " + (processedCount === 1 ? "zaświadczenie" : "zaświadczeń") + ".\\n\\nPliki zostały zapisane w tym samym folderze co arkusz.");
     }
   } catch (e) {
     logError("Błąd podczas przetwarzania danych certyfikatu", e);
@@ -854,5 +842,65 @@ function extractPersonData(row, columnIndices, rowNumber, lpValue, birthDateValu
     birthPlace: birthPlaceValue || getValue(columnIndices.birthPlace),
     birthDate: formatDate(rawBirthDate)
   };
+}
+
+function generateCertificateDocument(personData, formData, personNumber) {
+  var config = getConfig();
+  
+  if (!config.DOC_TEMPLATE_ID) {
+    throw new Error("Brak DOC_TEMPLATE_ID w konfiguracji. Ustaw DOC_TEMPLATE_ID w Properties Service.");
+  }
+  
+  try {
+    var templateFile = DriveApp.getFileById(config.DOC_TEMPLATE_ID);
+    
+    var spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+    var spreadsheetFile = DriveApp.getFileById(spreadsheet.getId());
+    var parentFolders = spreadsheetFile.getParents();
+    var targetFolder = parentFolders.hasNext() ? parentFolders.next() : DriveApp.getRootFolder();
+    
+    var fileName = (personData.firstName || "") + " " + (personData.lastName || "") + " zaświadczenie";
+    fileName = fileName.trim();
+    
+    var newFile = templateFile.makeCopy(fileName, targetFolder);
+    var newDoc = DocumentApp.openById(newFile.getId());
+    var body = newDoc.getBody();
+    
+    var replacements = {
+      "name": ((personData.firstName || "") + " " + (personData.lastName || "")).trim() || "Brak",
+      "dateOfBrith": personData.birthDate || "Brak",
+      "id": personData.pesel || "Brak",
+      "curseName": formData.courseName || "Brak",
+      "hours": formData.hours || "Brak",
+      "teacher": formData.instructor || "Brak",
+      "nr": personData.lp || "Brak",
+      "cityAndData": formData.locationDate || "Brak",
+      "city": personData.birthPlace || "Brak",
+      "roz": formData.regulation || "Brak"
+    };
+    
+    for (var placeholder in replacements) {
+      if (replacements.hasOwnProperty(placeholder)) {
+        body.replaceText(placeholder, replacements[placeholder]);
+      }
+    }
+    
+    newDoc.saveAndClose();
+    
+    var pdfBlob = newFile.getAs("application/pdf");
+    var pdfFile = targetFolder.createFile(pdfBlob);
+    pdfFile.setName(fileName + ".pdf");
+    
+    logInfo("Wygenerowano dokumenty dla: " + personData.firstName + " " + personData.lastName + " (" + fileName + ")");
+    
+    return {
+      docId: newFile.getId(),
+      pdfId: pdfFile.getId(),
+      fileName: fileName
+    };
+  } catch (e) {
+    logError("Błąd podczas generowania dokumentu", e);
+    throw e;
+  }
 }`.trim();
 }
