@@ -735,16 +735,19 @@ function processCertificateData(data) {
       processedCount++;
       
       try {
-        generateCertificateDocument(personData, data, processedCount);
+        var result = generateCertificateDocument(personData, data, processedCount);
+        SpreadsheetApp.getUi().alert("✅ Osoba #" + processedCount + "/" + dataRows.length + "\\n" + personData.firstName + " " + personData.lastName + "\\n\\nDokument: " + result.fileName + "\\nDoc ID: " + result.docId + "\\nPDF ID: " + result.pdfId);
       } catch (docError) {
+        var errorMsg = docError.toString();
         logError("Błąd podczas generowania dokumentu dla osoby #" + processedCount + " (" + personData.firstName + " " + personData.lastName + "):", docError);
+        SpreadsheetApp.getUi().alert("❌ Błąd podczas generowania dokumentu dla osoby #" + processedCount + ":\\n" + personData.firstName + " " + personData.lastName + "\\n\\nBłąd: " + errorMsg);
       }
     }
     
     if (processedCount === 0) {
       SpreadsheetApp.getUi().alert("⚠️ Nie znaleziono żadnych danych osobowych w arkuszu.");
     } else {
-      SpreadsheetApp.getUi().alert("✅ Wygenerowano " + processedCount + " " + (processedCount === 1 ? "zaświadczenie" : "zaświadczeń") + ".\\n\\nPliki zostały zapisane w tym samym folderze co arkusz.");
+      SpreadsheetApp.getUi().alert("✅ Przetworzono " + processedCount + " " + (processedCount === 1 ? "osobę" : "osób") + ".\\n\\nWszystkie dokumenty zostały wygenerowane.");
     }
   } catch (e) {
     logError("Błąd podczas przetwarzania danych certyfikatu", e);
@@ -851,20 +854,30 @@ function generateCertificateDocument(personData, formData, personNumber) {
     throw new Error("Brak DOC_TEMPLATE_ID w konfiguracji. Ustaw DOC_TEMPLATE_ID w Properties Service.");
   }
   
+  var debugMessages = [];
+  
   try {
+    debugMessages.push("🔍 Rozpoczynam generowanie dla: " + personData.firstName + " " + personData.lastName);
+    
     var templateFile = DriveApp.getFileById(config.DOC_TEMPLATE_ID);
+    debugMessages.push("📄 Szablon: " + templateFile.getName());
     
     var spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
     var spreadsheetFile = DriveApp.getFileById(spreadsheet.getId());
     var parentFolders = spreadsheetFile.getParents();
     var targetFolder = parentFolders.hasNext() ? parentFolders.next() : DriveApp.getRootFolder();
+    debugMessages.push("📁 Folder: " + targetFolder.getName());
     
     var fileName = (personData.firstName || "") + " " + (personData.lastName || "") + " zaświadczenie";
     fileName = fileName.trim();
+    debugMessages.push("📝 Nazwa pliku: " + fileName);
     
     var newFile = templateFile.makeCopy(fileName, targetFolder);
+    debugMessages.push("✅ Skopiowano szablon (ID: " + newFile.getId().substring(0, 10) + "...)");
+    
     var newDoc = DocumentApp.openById(newFile.getId());
     var body = newDoc.getBody();
+    debugMessages.push("✏️ Otwarto dokument do edycji");
     
     var replacements = {
       "name": ((personData.firstName || "") + " " + (personData.lastName || "")).trim() || "Brak",
@@ -879,19 +892,38 @@ function generateCertificateDocument(personData, formData, personNumber) {
       "roz": formData.regulation || "Brak"
     };
     
+    var replacedCount = 0;
     for (var placeholder in replacements) {
       if (replacements.hasOwnProperty(placeholder)) {
-        body.replaceText(placeholder, replacements[placeholder]);
+        try {
+          var beforeText = body.getText();
+          body.replaceText(placeholder, replacements[placeholder]);
+          var afterText = body.getText();
+          if (beforeText !== afterText) {
+            replacedCount++;
+            var value = replacements[placeholder];
+            var displayValue = value.length > 30 ? value.substring(0, 30) + "..." : value;
+            debugMessages.push("✓ " + placeholder + " → " + displayValue);
+          } else {
+            debugMessages.push("⚠ " + placeholder + " - nie znaleziono w dokumencie");
+          }
+        } catch (replaceError) {
+          debugMessages.push("❌ Błąd przy " + placeholder + ": " + replaceError.toString());
+          logError("Błąd podczas zastępowania placeholder " + placeholder + ":", replaceError);
+        }
       }
     }
+    debugMessages.push("📊 Zastąpiono " + replacedCount + "/" + Object.keys(replacements).length + " placeholderów");
     
     newDoc.saveAndClose();
+    debugMessages.push("💾 Zapisano dokument");
     
     var pdfBlob = newFile.getAs("application/pdf");
     var pdfFile = targetFolder.createFile(pdfBlob);
     pdfFile.setName(fileName + ".pdf");
+    debugMessages.push("📄 Utworzono PDF: " + pdfFile.getName());
     
-    logInfo("Wygenerowano dokumenty dla: " + personData.firstName + " " + personData.lastName + " (" + fileName + ")");
+    SpreadsheetApp.getUi().alert("🔍 DEBUG - Generowanie dokumentu\\n\\n" + debugMessages.join("\\n"));
     
     return {
       docId: newFile.getId(),
@@ -899,8 +931,9 @@ function generateCertificateDocument(personData, formData, personNumber) {
       fileName: fileName
     };
   } catch (e) {
+    var errorMsg = "Błąd podczas generowania dokumentu: " + e.toString() + "\\n\\nStack: " + (e.stack || "Brak") + "\\n\\nDebug:\\n" + debugMessages.join("\\n");
     logError("Błąd podczas generowania dokumentu", e);
-    throw e;
+    throw new Error(errorMsg);
   }
 }`.trim();
 }
