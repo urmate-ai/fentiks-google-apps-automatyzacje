@@ -10,18 +10,30 @@ function installMenusInAllFiles() {
 
   try {
     const folder = DriveApp.getFolderById(config.DRIVE_FOLDER_ID);
-    const files = folder.getFilesByType(MimeType.GOOGLE_SHEETS);
-
+    
     let processedCount = 0;
     let successCount = 0;
     let updatedCount = 0;
 
-    while (files.hasNext()) {
-      const file = files.next();
+    const allFiles = getAllSpreadsheetFilesRecursive(folder);
+    
+    logInfo(`📁 [AUTO] Found ${allFiles.length} files to process (including subfolders)`);
+
+    for (let i = 0; i < allFiles.length; i++) {
+      const file = allFiles[i];
+      const fileMimeType = file.getMimeType();
+      const fileType = fileMimeType === MimeType.GOOGLE_SHEETS ? "📊 Google Sheets" : "📗 Excel";
+      const filePath = getFilePath(file, folder);
+
+      if (fileMimeType === MimeType.MICROSOFT_EXCEL) {
+        logInfo(`⏭️ [AUTO] Skipping Excel file (not supported): ${file.getName()}${filePath}`);
+        continue;
+      }
+
       processedCount++;
 
       if (hasInstalledScript(file)) {
-        logInfo(`🔄 [AUTO] [${processedCount}] Updating existing script: ${file.getName()}`);
+        logInfo(`🔄 [AUTO] [${processedCount}/${allFiles.length}] Updating existing script: ${file.getName()} (${fileType})${filePath}`);
         
         if (updateExistingScript(file, config)) {
           updatedCount++;
@@ -32,7 +44,7 @@ function installMenusInAllFiles() {
         continue;
       }
 
-      logInfo(`🚀 [AUTO] [${processedCount}] Installing: ${file.getName()}`);
+      logInfo(`🚀 [AUTO] [${processedCount}/${allFiles.length}] Installing: ${file.getName()} (${fileType})${filePath}`);
 
       if (installMenuInFile(file, config)) {
         successCount++;
@@ -46,6 +58,67 @@ function installMenusInAllFiles() {
     logInfo(summary);
   } catch (e) {
     logError("❌ [AUTO] Error", e);
+  }
+}
+
+function getAllSpreadsheetFilesRecursive(folder, fileList = []) {
+  try {
+    const googleSheets = folder.getFilesByType(MimeType.GOOGLE_SHEETS);
+    while (googleSheets.hasNext()) {
+      fileList.push(googleSheets.next());
+    }
+
+    const excelFiles = folder.getFilesByType(MimeType.MICROSOFT_EXCEL);
+    while (excelFiles.hasNext()) {
+      fileList.push(excelFiles.next());
+    }
+
+    const subFolders = folder.getFolders();
+    while (subFolders.hasNext()) {
+      const subFolder = subFolders.next();
+      logInfo(`📂 [AUTO] Searching in subfolder: ${subFolder.getName()}`);
+      getAllSpreadsheetFilesRecursive(subFolder, fileList);
+    }
+
+    return fileList;
+  } catch (e) {
+    logError(`❌ [AUTO] Error searching folder ${folder.getName()}:`, e);
+    return fileList;
+  }
+}
+
+function getFilePath(file, rootFolder) {
+  try {
+    const parents = file.getParents();
+    if (!parents.hasNext()) {
+      return "";
+    }
+    
+    const parent = parents.next();
+    if (parent.getId() === rootFolder.getId()) {
+      return "";
+    }
+    
+    let path = parent.getName();
+    let currentParent = parent;
+    let depth = 0;
+    const maxDepth = 10;
+    
+    while (depth < maxDepth) {
+      const grandParents = currentParent.getParents();
+      if (!grandParents.hasNext()) break;
+      
+      const grandParent = grandParents.next();
+      if (grandParent.getId() === rootFolder.getId()) break;
+      
+      path = grandParent.getName() + " > " + path;
+      currentParent = grandParent;
+      depth++;
+    }
+    
+    return " (📁 " + path + ")";
+  } catch (e) {
+    return "";
   }
 }
 
