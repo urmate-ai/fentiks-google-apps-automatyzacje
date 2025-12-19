@@ -4,8 +4,6 @@ function onOpen(e) {
       .createMenu("Automatyzacje")
       .addItem("Dodaj kontakty do WooCommerce", "dodajKontaktyDoWooCommerce")
       .addSeparator()
-      .addItem("📊 Sprawdź status", "checkStatus")
-      .addSeparator()
       .addItem("Wygeneruj certyfikat ukończenia kursu", "generateCertificate")
       .addToUi();
   } catch (err) {

@@ -8,7 +8,7 @@ function installMenusInAllFiles() {
     return;
   }
 
-  try {
+  try {     
     const folder = DriveApp.getFolderById(config.DRIVE_FOLDER_ID);
     
     let processedCount = 0;
@@ -456,8 +456,6 @@ function generateMenuCode() {
     '    SpreadsheetApp.getUi().createMenu("Automatyzacja WooCommerce")',
     '      .addItem("Dodaj kontakty do WooCommerce", "dodajKontaktyDoWooCommerce")',
     '      .addSeparator()',
-      '      .addItem("📊 Sprawdź status", "checkStatus")',
-      '      .addSeparator()',
       '      .addItem("Wygeneruj certyfikat ukończenia kursu", "generateCertificate")',
       '      .addToUi();',
     '  } catch (err) {',
@@ -481,16 +479,6 @@ function generateMenuCode() {
     '  };',
     '}',
     '',
-    'function checkStatus() {',
-    '  var config = getConfig();',
-    '  var status = "🤖 STATUS AUTOMATU WOOCOMMERCE\\n\\n";',
-    '  status += "📁 Folder: " + (config.DRIVE_FOLDER_ID ? "✅ Ustawiony" : "❌ Brak") + "\\n";',
-    '  status += "🌐 API: " + (config.URL_BASE ? "✅ Skonfigurowane" : "❌ Brak") + "\\n";',
-    '  status += "🔑 Klucze: " + (config.CONSUMER_KEY ? "✅ Ustawione" : "❌ Brak") + "\\n";',
-    '  status += "📱 Slack: " + (config.SLACK_WEBHOOK_URL ? "✅ Skonfigurowany" : "❌ Brak") + "\\n\\n";',
-    '  status += "⚙️ Automat działa co 10 minut";',
-    '  SpreadsheetApp.getUi().alert(status);',
-    '}'
   ].join('\n');
 }
 
