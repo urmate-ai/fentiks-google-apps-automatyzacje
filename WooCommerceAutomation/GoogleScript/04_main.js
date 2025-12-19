@@ -402,18 +402,14 @@ function extractPersonData(row, columnIndices, rowNumber, lpValue = null, birthD
 }
 
 function generateCertificateDocument(personData, formData, personNumber) {
-  const config = getConfig();
-  
-  if (!config.DOC_TEMPLATE_ID) {
-    throw new Error("Brak DOC_TEMPLATE_ID w konfiguracji. Ustaw DOC_TEMPLATE_ID w Properties Service.");
-  }
+  const DOC_TEMPLATE_ID = "1GI2DIIvK4CsxR-Ck0qStDMbwOmkrwirnLT5Mw5KGXLM";
   
   let debugMessages = [];
   
   try {
     debugMessages.push(`🔍 Rozpoczynam generowanie dla: ${personData.firstName} ${personData.lastName}`);
     
-    const templateFile = DriveApp.getFileById(config.DOC_TEMPLATE_ID);
+    const templateFile = DriveApp.getFileById(DOC_TEMPLATE_ID);
     debugMessages.push(`📄 Szablon: ${templateFile.getName()}`);
     
     const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();

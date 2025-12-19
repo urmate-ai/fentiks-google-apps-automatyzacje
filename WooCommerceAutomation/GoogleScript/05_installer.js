@@ -848,18 +848,14 @@ function extractPersonData(row, columnIndices, rowNumber, lpValue, birthDateValu
 }
 
 function generateCertificateDocument(personData, formData, personNumber) {
-  var config = getConfig();
-  
-  if (!config.DOC_TEMPLATE_ID) {
-    throw new Error("Brak DOC_TEMPLATE_ID w konfiguracji. Ustaw DOC_TEMPLATE_ID w Properties Service.");
-  }
+  var DOC_TEMPLATE_ID = "1GI2DIIvK4CsxR-Ck0qStDMbwOmkrwirnLT5Mw5KGXLM";
   
   var debugMessages = [];
   
   try {
     debugMessages.push("🔍 Rozpoczynam generowanie dla: " + personData.firstName + " " + personData.lastName);
     
-    var templateFile = DriveApp.getFileById(config.DOC_TEMPLATE_ID);
+    var templateFile = DriveApp.getFileById(DOC_TEMPLATE_ID);
     debugMessages.push("📄 Szablon: " + templateFile.getName());
     
     var spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
