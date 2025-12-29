@@ -118,6 +118,16 @@ src/
 └── schedule-scraper/ # Pobieranie terminarza
 ```
 
+## Wdrożenie na Render
+
+Aplikacja może być wdrożona na Render jako Background Worker. Zobacz [DEPLOY.md](./DEPLOY.md) dla szczegółowych instrukcji.
+
+Szybki start:
+1. Utwórz bazę PostgreSQL na Render
+2. Utwórz Background Worker z Dockerfile
+3. Dodaj wszystkie zmienne środowiskowe
+4. Uruchom `CREATE EXTENSION vector;` w bazie danych
+
 ## Migracja z Vertex AI
 
 Projekt został przepisany z Vertex AI na:

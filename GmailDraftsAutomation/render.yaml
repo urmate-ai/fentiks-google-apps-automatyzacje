@@ -1,0 +1,29 @@
+services:
+  - type: worker
+    name: gmail-drafts-automation
+    env: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    plan: starter # lub free, starter, standard, pro
+    # Worker nie potrzebuje healthCheckPath (tylko dla web services)
+    envVars:
+      - key: NODE_ENV
+        value: production
+      # Dodaj wszystkie wymagane zmienne środowiskowe w Render Dashboard
+      # lub użyj sync z .env (nie zalecane dla production)
+      # - key: DATABASE_URL
+      #   sync: false
+      # - key: GOOGLE_REFRESH_TOKEN
+      #   sync: false
+      # - key: OPENAI_API_KEY
+      #   sync: false
+      # itd.
+
+databases:
+  - name: gmail-automation-db
+    plan: starter # lub free, starter, standard, pro
+    databaseName: gmail_automation
+    user: gmail_automation
+    # Render automatycznie utworzy DATABASE_URL
+    # Musisz uruchomić: CREATE EXTENSION vector; w PostgreSQL
+
