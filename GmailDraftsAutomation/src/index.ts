@@ -85,6 +85,7 @@ async function main() {
       logger.info('This will run:');
       logger.info('  - Gmail sync (every 5 minutes)');
       logger.info('  - RAG refresh (after new emails)');
+      logger.info('  - Drive folder watch (every 15 minutes)');
       logger.info('  - Email automation (every 10 minutes)');
       logger.info('Press Ctrl+C to stop\n');
 
@@ -120,15 +121,35 @@ async function main() {
         }
       };
 
+      const driveWatchInterval = 15 * 60 * 1000;
+      const checkDriveChanges = async () => {
+        try {
+          logger.info('[Drive Watch] Checking for changes in Drive folder...');
+          const hasChanges = await ragRefresher.checkForDriveChanges();
+          if (hasChanges) {
+            logger.info('[Drive Watch] Changes detected. Syncing RAG from Drive...');
+            await ragRefresher.syncRagFromDrive();
+            logger.info('[Drive Watch] RAG sync completed');
+          } else {
+            logger.info('[Drive Watch] No changes detected');
+          }
+        } catch (error) {
+          logger.error('[Drive Watch] Error', error);
+        }
+      };
+
       await syncGmail();
       await runEmailAutomation();
+      await checkDriveChanges();
 
       const gmailInterval = setInterval(syncGmail, gmailSyncInterval);
       const emailInterval = setInterval(runEmailAutomation, emailAutomationInterval);
+      const driveWatchIntervalId = setInterval(checkDriveChanges, driveWatchInterval);
 
       const cleanup = () => {
         clearInterval(gmailInterval);
         clearInterval(emailInterval);
+        clearInterval(driveWatchIntervalId);
         logger.info('Stopping watch-all mode...');
         process.exit(0);
       };

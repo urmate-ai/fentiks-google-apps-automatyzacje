@@ -86,6 +86,27 @@ export class VectorStore {
     }
   }
 
+  async getDocument(documentId: string): Promise<{ id: string; driveId: string; updatedAt: Date } | null> {
+    const client = await getPool().connect();
+    try {
+      const result = await client.query(
+        'SELECT id, drive_id, updated_at FROM documents WHERE id = $1',
+        [documentId]
+      );
+      if (result.rows.length === 0) {
+        return null;
+      }
+      const row = result.rows[0];
+      return {
+        id: row.id,
+        driveId: row.drive_id,
+        updatedAt: new Date(row.updated_at),
+      };
+    } finally {
+      client.release();
+    }
+  }
+
   async deleteDocument(documentId: string): Promise<void> {
     const client = await getPool().connect();
     try {

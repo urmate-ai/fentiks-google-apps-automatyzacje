@@ -106,8 +106,23 @@ Po wdrożeniu, sprawdź logi w Render Dashboard:
 # Powinieneś zobaczyć:
 Starting Gmail Drafts Automation
 Starting FULL AUTOMATION in watch mode
+This will run:
+  - Gmail sync (every 5 minutes)
+  - RAG refresh (after new emails)
+  - Drive folder watch (every 15 minutes)
+  - Email automation (every 10 minutes)
 Watch mode active. Waiting for tasks...
 ```
+
+### Automatyczne ładowanie plików z Drive
+
+Aplikacja automatycznie:
+- **Obserwuje folder Drive** co 15 minut
+- **Wykrywa nowe pliki** i ładuje je do bazy RAG
+- **Wykrywa zmienione pliki** (porównuje `modifiedTime` z Drive z `updated_at` w bazie)
+- **Usuwa z bazy** pliki usunięte z Drive
+
+Wystarczy dodać plik do folderu `RAG_REFRESHER_ROOT_FOLDER_ID` na Google Drive, a aplikacja automatycznie go załaduje!
 
 ## Krok 5: Monitorowanie
 

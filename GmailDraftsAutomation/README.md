@@ -98,6 +98,7 @@ npm run gmail:watch
 - `npm run watch:all` - **Tryb ciągły** - uruchamia wszystko w tle:
   - Gmail sync co 5 minut
   - RAG refresh po nowych mailach
+  - **Drive folder watch co 15 minut** - automatycznie ładuje nowe/zmienione pliki z Drive do bazy
   - Email automation co 10 minut
 - `npm run gmail:sync` - Synchronizacja maili z Gmail do Drive (7 dni)
 - `npm run gmail:sync:full` - Pełna synchronizacja maili (180 dni)
