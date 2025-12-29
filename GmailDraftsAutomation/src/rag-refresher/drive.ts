@@ -50,6 +50,45 @@ export class DriveService {
     return Array.from(collectedFileIds);
   }
 
+  async listFilesWithMetadata(rootFolderId: string): Promise<Array<{ id: string; modifiedTime: string }>> {
+    const visitedFolders = new Set<string>();
+    const collectedFiles: Array<{ id: string; modifiedTime: string }> = [];
+
+    const crawl = async (folderId: string): Promise<void> => {
+      if (visitedFolders.has(folderId)) {
+        return;
+      }
+      visitedFolders.add(folderId);
+
+      try {
+        const filesResponse = await this.drive.files.list({
+          q: `'${folderId}' in parents and trashed=false`,
+          fields: 'files(id, name, mimeType, modifiedTime)',
+          pageSize: 1000,
+        });
+
+        const files = filesResponse.data.files || [];
+        for (const file of files) {
+          if (file.id && file.name && !this.shouldIgnoreFile(file.name)) {
+            if (file.mimeType === 'application/vnd.google-apps.folder') {
+              await crawl(file.id);
+            } else if (file.modifiedTime) {
+              collectedFiles.push({
+                id: file.id,
+                modifiedTime: file.modifiedTime,
+              });
+            }
+          }
+        }
+      } catch (error) {
+        logger.error(`Error crawling folder ${folderId}`, error);
+      }
+    };
+
+    await crawl(rootFolderId);
+    return collectedFiles;
+  }
+
   async readFileContents(fileIds: string[]): Promise<Array<{ id: string; content: string }>> {
     const results: Array<{ id: string; content: string }> = [];
 

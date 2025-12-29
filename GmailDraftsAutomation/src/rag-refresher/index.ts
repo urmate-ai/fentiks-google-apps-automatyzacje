@@ -98,6 +98,57 @@ export class RagRefresher {
     logger.info('RAG synchronization completed');
   }
 
+  async checkForDriveChanges(): Promise<boolean> {
+    if (!config.driveRootFolderId) {
+      throw new Error('RAG_REFRESHER_ROOT_FOLDER_ID not configured');
+    }
+
+    logger.debug('Checking for changes in Drive folder...');
+
+    const driveFiles = await this.driveService.listFilesWithMetadata(config.driveRootFolderId);
+    const existingDocuments = await this.vectorStore.listDocuments();
+    const documentsIndex = new Map<string, string>();
+    existingDocuments.forEach((doc) => {
+      documentsIndex.set(doc.driveId, doc.id);
+    });
+
+    const newFiles = driveFiles.filter((file) => !documentsIndex.has(file.id));
+    if (newFiles.length > 0) {
+      logger.info(`Found ${newFiles.length} new files in Drive`);
+      return true;
+    }
+
+    const changedFiles: string[] = [];
+    for (const driveFile of driveFiles) {
+      if (documentsIndex.has(driveFile.id)) {
+        const documentId = documentsIndex.get(driveFile.id)!;
+        const dbDocument = await this.vectorStore.getDocument(documentId);
+        if (dbDocument) {
+          const driveModified = new Date(driveFile.modifiedTime);
+          const dbUpdated = new Date(dbDocument.updatedAt);
+          if (driveModified > dbUpdated) {
+            changedFiles.push(driveFile.id);
+          }
+        }
+      }
+    }
+
+    if (changedFiles.length > 0) {
+      logger.info(`Found ${changedFiles.length} changed files in Drive`);
+      return true;
+    }
+
+    const driveFileIds = new Set(driveFiles.map((f) => f.id));
+    const deletedFiles = existingDocuments.filter((doc) => !driveFileIds.has(doc.driveId));
+    if (deletedFiles.length > 0) {
+      logger.info(`Found ${deletedFiles.length} deleted files in Drive`);
+      return true;
+    }
+
+    logger.debug('No changes detected in Drive folder');
+    return false;
+  }
+
   private async processDocument(driveId: string, content: string): Promise<void> {
     const entries = parseJsonlContent(content);
     const text = extractTextFromJsonl(entries);
