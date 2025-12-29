@@ -67,14 +67,26 @@ Postępuj zgodnie z instrukcjami, aby uzyskać `GOOGLE_REFRESH_TOKEN` i dodaj go
 # Development
 npm run dev
 
-# Production - wszystkie moduły
+# Production - wszystkie moduły (jednorazowo)
 npm run run:all
+
+# Tryb ciągły (watch-all) - ZALECANE dla produkcji
+npm run watch:all
 
 # Tylko RAG refresh
 npm run rag:refresh
 
 # Tylko email automation
 npm run email:automation
+
+# Gmail sync (ostatnie 7 dni)
+npm run gmail:sync
+
+# Gmail sync (ostatnie 180 dni)
+npm run gmail:sync:full
+
+# Gmail sync w trybie watch (tylko nowe maile)
+npm run gmail:watch
 ```
 
 ## Skrypty
@@ -82,7 +94,14 @@ npm run email:automation
 - `npm run oauth:setup` - Konfiguracja Google OAuth
 - `npm run rag:refresh` - Synchronizacja dokumentów z Drive do pgvector
 - `npm run email:automation` - Automatyczne generowanie odpowiedzi na maile
-- `npm run run:all` - Uruchomienie wszystkich modułów
+- `npm run run:all` - Uruchomienie wszystkich modułów (jednorazowo)
+- `npm run watch:all` - **Tryb ciągły** - uruchamia wszystko w tle:
+  - Gmail sync co 5 minut
+  - RAG refresh po nowych mailach
+  - Email automation co 10 minut
+- `npm run gmail:sync` - Synchronizacja maili z Gmail do Drive (7 dni)
+- `npm run gmail:sync:full` - Pełna synchronizacja maili (180 dni)
+- `npm run gmail:watch` - Gmail sync w trybie watch (tylko nowe maile)
 
 ## Struktura projektu
 

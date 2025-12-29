@@ -78,6 +78,68 @@ async function main() {
       await emailAutomation.main();
     }
 
+    if (process.argv.includes('--watch-all')) {
+      logger.info('========================================');
+      logger.info('Starting FULL AUTOMATION in watch mode');
+      logger.info('========================================');
+      logger.info('This will run:');
+      logger.info('  - Gmail sync (every 5 minutes)');
+      logger.info('  - RAG refresh (after new emails)');
+      logger.info('  - Email automation (every 10 minutes)');
+      logger.info('Press Ctrl+C to stop\n');
+
+      const gmailSyncer = new GmailSyncer(auth);
+      const emailAutomation = new EmailAutomation(auth);
+      const ragRefresher = new RagRefresher(auth);
+      await ragRefresher.initialize();
+
+      const gmailSyncInterval = 5 * 60 * 1000;
+      const syncGmail = async () => {
+        try {
+          logger.info('[Gmail Sync] Checking for new messages...');
+          const count = await gmailSyncer.syncNewMessages();
+          if (count > 0) {
+            logger.info(`[Gmail Sync] Synced ${count} new messages. Triggering RAG refresh...`);
+            await ragRefresher.syncRagFromDrive();
+          } else {
+            logger.info('[Gmail Sync] No new messages found');
+          }
+        } catch (error) {
+          logger.error('[Gmail Sync] Error', error);
+        }
+      };
+
+      const emailAutomationInterval = 10 * 60 * 1000;
+      const runEmailAutomation = async () => {
+        try {
+          logger.info('[Email Automation] Processing threads...');
+          await emailAutomation.main();
+          logger.info('[Email Automation] Completed');
+        } catch (error) {
+          logger.error('[Email Automation] Error', error);
+        }
+      };
+
+      await syncGmail();
+      await runEmailAutomation();
+
+      const gmailInterval = setInterval(syncGmail, gmailSyncInterval);
+      const emailInterval = setInterval(runEmailAutomation, emailAutomationInterval);
+
+      const cleanup = () => {
+        clearInterval(gmailInterval);
+        clearInterval(emailInterval);
+        logger.info('Stopping watch-all mode...');
+        process.exit(0);
+      };
+
+      process.on('SIGINT', cleanup);
+      process.on('SIGTERM', cleanup);
+
+      logger.info('Watch mode active. Waiting for tasks...');
+      return;
+    }
+
     logger.info('Completed successfully');
   } catch (error) {
     logger.error('Fatal error', error);

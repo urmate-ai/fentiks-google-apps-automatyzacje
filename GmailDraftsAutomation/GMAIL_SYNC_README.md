@@ -99,20 +99,33 @@ RAG refresher automatycznie:
 
 ## Automatyczne uruchamianie
 
-Aby automatycznie synchronizować nowe maile, możesz:
+### Tryb Watch-All (Zalecane)
 
-1. **Użyć trybu watch** (działa w tle):
+Uruchamia wszystko w trybie ciągłym:
+- Gmail sync co 5 minut
+- RAG refresh po nowych mailach
+- Email automation co 10 minut
+
+```bash
+npm run watch:all
+```
+
+Program będzie działał w tle do momentu przerwania (Ctrl+C).
+
+### Inne opcje
+
+1. **Tylko Gmail sync w trybie watch**:
    ```bash
    npm run gmail:watch
    ```
 
-2. **Ustawić cron job** (Linux/Mac):
+2. **Cron job** (Linux/Mac):
    ```bash
    # Sprawdzaj co 5 minut
    */5 * * * * cd /path/to/project && npm run gmail:sync
    ```
 
-3. **Użyć Windows Task Scheduler** (Windows):
+3. **Windows Task Scheduler**:
    - Utwórz zadanie uruchamiające `npm run gmail:sync` co 5 minut
 
 ## Filtrowanie maili
