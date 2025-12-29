@@ -3,10 +3,18 @@ import { config } from '../shared/config/index.js';
 import { logger } from '../shared/logger/index.js';
 
 export function createGoogleAuth() {
+  if (!config.googleClientId || !config.googleClientSecret) {
+    throw new Error(
+      'GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET must be set to use Google OAuth'
+    );
+  }
+
+  const redirectUri = config.googleRedirectUri || 'urn:ietf:wg:oauth:2.0:oob';
+
   const oauth2Client = new google.auth.OAuth2(
     config.googleClientId,
     config.googleClientSecret,
-    config.googleRedirectUri
+    redirectUri
   );
 
   return oauth2Client;

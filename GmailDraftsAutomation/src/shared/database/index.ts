@@ -1,10 +1,13 @@
-import { Pool, PoolClient } from 'pg';
+import pg from 'pg';
 import { config } from '../config/index.js';
 import { logger } from '../logger/index.js';
 
-let pool: Pool | null = null;
+const { Pool } = pg;
+type PoolClient = pg.PoolClient;
 
-export function getPool(): Pool {
+let pool: pg.Pool | null = null;
+
+export function getPool(): pg.Pool {
   if (!pool) {
     pool = new Pool({
       connectionString: config.databaseUrl,
@@ -13,7 +16,7 @@ export function getPool(): Pool {
       connectionTimeoutMillis: 2000,
     });
 
-    pool.on('error', (err) => {
+    pool.on('error', (err: Error) => {
       logger.error('Unexpected database pool error', err);
     });
   }

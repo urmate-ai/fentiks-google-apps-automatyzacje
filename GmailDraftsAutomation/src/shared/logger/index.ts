@@ -9,7 +9,16 @@ const logLevels: Record<string, number> = {
   Debug: 4,
 };
 
+const levelMapping: Record<string, string> = {
+  None: 'silent',
+  Error: 'error',
+  Warning: 'warn',
+  Information: 'info',
+  Debug: 'debug',
+};
+
 const currentLevel = logLevels[config.logLevel] ?? logLevels.Information;
+const winstonLevel = levelMapping[config.logLevel || 'Information'] || 'info';
 
 const format = winston.format.combine(
   winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
@@ -45,8 +54,7 @@ if (process.env.NODE_ENV === 'production') {
 }
 
 const logger = winston.createLogger({
-  level: config.logLevel.toLowerCase(),
-  levels: logLevels,
+  level: winstonLevel,
   format,
   transports,
   silent: currentLevel === 0,

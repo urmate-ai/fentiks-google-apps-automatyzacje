@@ -7,8 +7,8 @@ const LogLevelSchema = z.enum(['None', 'Error', 'Warning', 'Information', 'Debug
 
 const ConfigSchema = z.object({
   databaseUrl: z.string().url(),
-  googleClientId: z.string().min(1),
-  googleClientSecret: z.string().min(1),
+  googleClientId: z.string().min(1).optional(),
+  googleClientSecret: z.string().min(1).optional(),
   googleRedirectUri: z.string().url().optional(),
   
   openaiApiKey: z.string().optional(),

@@ -77,7 +77,7 @@ export class VectorStore {
       const result = await client.query(
         'SELECT id, drive_id FROM documents ORDER BY updated_at DESC'
       );
-      return result.rows.map((row) => ({
+      return result.rows.map((row: { id: string; drive_id: string }) => ({
         id: row.id,
         driveId: row.drive_id,
       }));
@@ -193,10 +193,10 @@ export class VectorStore {
         [embeddingStr, threshold, topK]
       );
 
-      return result.rows.map((row) => ({
+      return result.rows.map((row: { content: string; metadata: DocumentMetadata; similarity: string | number }) => ({
         content: row.content,
         metadata: row.metadata as DocumentMetadata,
-        similarity: parseFloat(row.similarity),
+        similarity: parseFloat(String(row.similarity)),
       }));
     } finally {
       client.release();
