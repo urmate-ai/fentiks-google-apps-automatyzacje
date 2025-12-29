@@ -179,6 +179,33 @@ export class VectorStore {
     const client = await getPool().connect();
     try {
       const embeddingStr = `[${queryEmbedding.join(',')}]`;
+
+      const countResult = await client.query(`SELECT COUNT(*) as count FROM ${this.tableName}`);
+      const totalChunks = parseInt(countResult.rows[0].count);
+      logger.debug(`Total chunks in database: ${totalChunks}`);
+      
+      const resultWithoutThreshold = await client.query(
+        `
+        SELECT 
+          content,
+          metadata,
+          1 - (embedding <=> $1::vector) as similarity
+        FROM ${this.tableName}
+        ORDER BY embedding <=> $1::vector
+        LIMIT $2
+      `,
+        [embeddingStr, topK]
+      );
+      
+      if (resultWithoutThreshold.rows.length > 0) {
+        logger.info(`Best matches (without threshold):`);
+        resultWithoutThreshold.rows.forEach((row: any, index: number) => {
+          const similarity = parseFloat(String(row.similarity));
+          const contentPreview = String(row.content).substring(0, 100);
+          logger.info(`  ${index + 1}. Similarity: ${similarity.toFixed(4)}, Content: "${contentPreview}..."`);
+        });
+      }
+      
       const result = await client.query(
         `
         SELECT 

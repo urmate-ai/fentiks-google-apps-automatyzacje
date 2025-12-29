@@ -32,6 +32,10 @@ export class GmailService {
     this.gmail = google.gmail({ version: 'v1', auth });
     this.llm = createLLM();
     this.ragService = new RagService();
+    
+    this.ragService.checkDatabaseStatus().catch((error) => {
+      logger.error('Failed to check RAG database status', error);
+    });
   }
 
   buildContext(_subject: string, _body: string): string {
@@ -212,7 +216,6 @@ Do NOT consider as quote requests:
       const messages = thread.data.messages || [];
       if (messages.length === 0) return;
 
-      // Get the latest message
       const latestMessage = messages[messages.length - 1];
       if (!latestMessage.id) return;
 
@@ -238,7 +241,6 @@ Do NOT consider as quote requests:
       const bodyText = this.extractBodyText(message.data);
       const bodyPlain = stripHtml(bodyText);
 
-      // Sprawdź czy to zapytanie ofertowe używając AI
       const isQuote = await this.isQuoteRequest(subject, bodyPlain);
       if (isQuote) {
         logger.info('To jest zapytanie ofertowe', { subject, threadId });
@@ -320,38 +322,79 @@ Do NOT consider as quote requests:
     const thread = await this.gmail.users.threads.get({
       userId: 'me',
       id: threadId,
-      format: 'minimal',
+      format: 'full',
     });
 
     const messages = thread.data.messages || [];
     if (messages.length === 0) return;
 
-    const latestMessageId = messages[messages.length - 1].id;
+    const latestMessage = messages[messages.length - 1];
+    const latestMessageId = latestMessage.id;
     if (!latestMessageId) return;
 
-    const raw = [
-      `In-Reply-To: <${latestMessageId}@mail.gmail.com>`,
-      `References: <${latestMessageId}@mail.gmail.com>`,
-      'Content-Type: text/html; charset=utf-8',
-      '',
-      htmlBody,
-    ].join('\n');
+    const headers = latestMessage.payload?.headers || [];
+    const subject = headers.find((h) => h.name?.toLowerCase() === 'subject')?.value || '';
+    const from = headers.find((h) => h.name?.toLowerCase() === 'from')?.value || '';
+    const messageId = headers.find((h) => h.name?.toLowerCase() === 'message-id')?.value || '';
+    const references = headers.find((h) => h.name?.toLowerCase() === 'references')?.value || '';
+    
+    const fromEmail = from.match(/<([^>]+)>/) ? from.match(/<([^>]+)>/)![1] : from.trim();
+    
+    const replySubject = subject.startsWith('Re:') ? subject : `Re: ${subject}`;
 
-    const encoded = Buffer.from(raw)
+    const referencesHeader = references 
+      ? `${references} ${messageId}`.trim() 
+      : messageId;
+
+    const cleanHtml = htmlBody
+      .replace(/<html[^>]*>/gi, '')
+      .replace(/<\/html>/gi, '')
+      .replace(/<body[^>]*>/gi, '')
+      .replace(/<\/body>/gi, '')
+      .trim();
+
+    const emailLines = [
+      `To: ${fromEmail}`,
+      `Subject: ${replySubject}`,
+      `Content-Type: text/html; charset=utf-8`,
+      `MIME-Version: 1.0`,
+    ];
+
+    if (messageId) {
+      emailLines.push(`In-Reply-To: ${messageId}`);
+    }
+    if (referencesHeader) {
+      emailLines.push(`References: ${referencesHeader}`);
+    }
+
+    emailLines.push('');
+    emailLines.push(cleanHtml);
+
+    const raw = emailLines.join('\r\n');
+
+    const encoded = Buffer.from(raw, 'utf-8')
       .toString('base64')
       .replace(/\+/g, '-')
       .replace(/\//g, '_')
       .replace(/=+$/, '');
 
-    await this.gmail.users.drafts.create({
-      userId: 'me',
-      requestBody: {
-        message: {
-          threadId,
-          raw: encoded,
+    try {
+      const draft = await this.gmail.users.drafts.create({
+        userId: 'me',
+        requestBody: {
+          message: {
+            threadId,
+            raw: encoded,
+          },
         },
-      },
-    });
+      });
+
+      logger.info(`Created draft ${draft.data.id} for thread ${threadId}`);
+      logger.debug(`Draft content preview: ${cleanHtml.substring(0, 100)}...`);
+    } catch (error) {
+      logger.error(`Failed to create draft for thread ${threadId}`, error);
+      throw error;
+    }
   }
 
   private async addLabel(threadId: string, labelName: string): Promise<void> {

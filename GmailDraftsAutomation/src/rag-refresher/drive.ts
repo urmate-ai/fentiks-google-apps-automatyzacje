@@ -55,12 +55,35 @@ export class DriveService {
 
     for (const id of fileIds) {
       try {
-        const file = await this.drive.files.get(
-          { fileId: id, alt: 'media' },
-          { responseType: 'text' }
-        );
+        const fileMetadata = await this.drive.files.get({
+          fileId: id,
+          fields: 'mimeType, name',
+        });
 
-        const content = typeof file.data === 'string' ? file.data : '';
+        const mimeType = fileMetadata.data.mimeType || '';
+        let content = '';
+
+        if (mimeType.startsWith('application/vnd.google-apps.')) {
+          const exportMimeType = this.getExportMimeType(mimeType);
+          
+          if (exportMimeType) {
+            const exported = await this.drive.files.export(
+              { fileId: id, mimeType: exportMimeType },
+              { responseType: 'text' }
+            );
+            content = typeof exported.data === 'string' ? exported.data : '';
+          } else {
+            logger.warn(`Unsupported Google Docs file type: ${mimeType} for file ${id}`);
+            content = '';
+          }
+        } else {
+          const file = await this.drive.files.get(
+            { fileId: id, alt: 'media' },
+            { responseType: 'text' }
+          );
+          content = typeof file.data === 'string' ? file.data : '';
+        }
+
         results.push({ id, content });
       } catch (error) {
         logger.error(`Error reading file ${id}`, error);
@@ -69,6 +92,16 @@ export class DriveService {
     }
 
     return results;
+  }
+
+  private getExportMimeType(googleMimeType: string): string | null {
+    const exportMap: Record<string, string> = {
+      'application/vnd.google-apps.document': 'text/plain',
+      'application/vnd.google-apps.spreadsheet': 'text/csv',
+      'application/vnd.google-apps.presentation': 'text/plain',
+    };
+
+    return exportMap[googleMimeType] || null;
   }
 }
 

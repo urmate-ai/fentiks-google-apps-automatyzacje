@@ -12,26 +12,71 @@ export class RagService {
     this.embedder = new Embedder();
   }
 
+  async checkDatabaseStatus(): Promise<void> {
+    try {
+      const documents = await this.vectorStore.listDocuments();
+      logger.info(`RAG database contains ${documents.length} documents`);
+      
+      if (documents.length === 0) {
+        logger.warn('RAG database is empty! Run "npm run rag:refresh" to import documents from Google Drive.');
+      }
+    } catch (error) {
+      logger.error('Error checking RAG database status', error);
+    }
+  }
+
   async retrieveContext(query: string): Promise<string> {
     try {
+      logger.info(`Searching RAG database for query: "${query.substring(0, 100)}..."`);
+      
       const queryEmbedding = await this.embedder.embedText(query);
+      logger.debug(`Query embedding created (dimension: ${queryEmbedding.length})`);
 
-      const results = await this.vectorStore.searchSimilar(
+      const allResults = await this.vectorStore.searchSimilar(
         queryEmbedding,
         config.ragTopK,
-        config.ragSimilarityThreshold
+        0.0
       );
+      
+      if (allResults.length > 0) {
+        const bestSimilarity = allResults[0].similarity;
+        logger.info(`Best match similarity: ${bestSimilarity.toFixed(4)}`);
+        
+        const dynamicThreshold = Math.max(bestSimilarity * 0.8, 0.4);
+        const finalThreshold = Math.min(dynamicThreshold, config.ragSimilarityThreshold);
+        
+        logger.info(`Using dynamic threshold: ${finalThreshold.toFixed(4)} (best match: ${bestSimilarity.toFixed(4)})`);
+        
+        const results = allResults.filter(r => r.similarity >= finalThreshold);
+        
+        logger.info(`RAG search found ${results.length} results (after filtering with threshold: ${finalThreshold.toFixed(4)}, topK: ${config.ragTopK})`);
+        
+        if (results.length === 0 && allResults.length > 0) {
+          logger.warn(`No results passed threshold ${finalThreshold.toFixed(4)}, but best match was ${bestSimilarity.toFixed(4)}`);
+          logger.warn('Consider lowering RAG_SIMILARITY_THRESHOLD in .env file');
+        }
+        
+        if (results.length === 0) {
+          logger.warn('No relevant context found in RAG database. Check if:');
+          logger.warn('1. Documents were imported (run: npm run rag:refresh)');
+          logger.warn(`2. Similarity threshold (${config.ragSimilarityThreshold}) is not too high`);
+          logger.warn('3. Query is similar to content in database');
+          return '';
+        }
 
-      if (results.length === 0) {
-        logger.debug('No relevant context found for query');
+        results.forEach((result, index) => {
+          logger.info(`RAG result ${index + 1}: similarity=${result.similarity.toFixed(3)}, content length=${result.content.length}`);
+        });
+
+        const contextParts = results.map((result, index) => {
+          return `[Context ${index + 1}]\n${result.content}\n(Similarity: ${result.similarity.toFixed(3)})`;
+        });
+
+        return contextParts.join('\n\n---\n\n');
+      } else {
+        logger.warn('No results found in RAG database at all');
         return '';
       }
-
-      const contextParts = results.map((result, index) => {
-        return `[Context ${index + 1}]\n${result.content}\n(Similarity: ${result.similarity.toFixed(3)})`;
-      });
-
-      return contextParts.join('\n\n---\n\n');
     } catch (error) {
       logger.error('Error retrieving RAG context', error);
       return '';
