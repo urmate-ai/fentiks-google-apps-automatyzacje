@@ -2,10 +2,12 @@
 
 import { initializeDatabase, closePool } from './shared/database/index.js';
 import { logger } from './shared/logger/index.js';
+import { config } from './shared/config/index.js';
 import { getAuthenticatedClient } from './auth/google.js';
 import { RagRefresher } from './rag-refresher/index.js';
 import { EmailAutomation } from './email-automation/index.js';
 import { GmailSyncer } from './gmail-syncer/index.js';
+import { FentiksSyncer } from './fentiks-syncer/index.js';
 
 async function main() {
   try {
@@ -67,9 +69,15 @@ async function main() {
         process.on('SIGTERM', cleanup);
         
       } else {
-        const daysBack = process.argv.includes('--full-sync') ? 180 : 7;
+        const daysBack = 180;
         await gmailSyncer.syncGmailToDrive(daysBack);
       }
+    }
+
+    if (process.argv.includes('--fentiks-sync') || process.argv.includes('--all')) {
+      logger.info('Running Fentiks schedule scraping and sync to Drive...');
+      const fentiksSyncer = new FentiksSyncer(auth);
+      await fentiksSyncer.syncFentiksToDrive();
     }
 
     if (process.argv.includes('--email-automation') || process.argv.includes('--all')) {
@@ -82,11 +90,17 @@ async function main() {
       logger.info('========================================');
       logger.info('Starting FULL AUTOMATION in watch mode');
       logger.info('========================================');
+      const gmailIntervalMin = Math.round(config.watchIntervals.gmailSync / 60000);
+      const emailIntervalMin = Math.round(config.watchIntervals.emailAutomation / 60000);
+      const driveIntervalMin = Math.round(config.watchIntervals.driveWatch / 60000);
+      const fentiksIntervalMin = Math.round(config.watchIntervals.fentiksSync / 60000);
+      
       logger.info('This will run:');
-      logger.info('  - Gmail sync (every 5 minutes)');
+      logger.info(`  - Gmail sync (every ${gmailIntervalMin} minutes)`);
       logger.info('  - RAG refresh (after new emails)');
-      logger.info('  - Drive folder watch (every 15 minutes)');
-      logger.info('  - Email automation (every 10 minutes)');
+      logger.info(`  - Drive folder watch (every ${driveIntervalMin} minutes)`);
+      logger.info(`  - Fentiks schedule scraping (every ${fentiksIntervalMin} minutes)`);
+      logger.info(`  - Email automation (every ${emailIntervalMin} minutes)`);
       logger.info('Press Ctrl+C to stop\n');
 
       const gmailSyncer = new GmailSyncer(auth);
@@ -94,7 +108,7 @@ async function main() {
       const ragRefresher = new RagRefresher(auth);
       await ragRefresher.initialize();
 
-      const gmailSyncInterval = 5 * 60 * 1000;
+      const gmailSyncInterval = config.watchIntervals.gmailSync;
       const syncGmail = async () => {
         try {
           logger.info('[Gmail Sync] Checking for new messages...');
@@ -110,7 +124,7 @@ async function main() {
         }
       };
 
-      const emailAutomationInterval = 10 * 60 * 1000;
+      const emailAutomationInterval = config.watchIntervals.emailAutomation;
       const runEmailAutomation = async () => {
         try {
           logger.info('[Email Automation] Processing threads...');
@@ -121,7 +135,7 @@ async function main() {
         }
       };
 
-      const driveWatchInterval = 15 * 60 * 1000;
+      const driveWatchInterval = config.watchIntervals.driveWatch;
       const checkDriveChanges = async () => {
         try {
           logger.info('[Drive Watch] Checking for changes in Drive folder...');
@@ -138,18 +152,33 @@ async function main() {
         }
       };
 
+      const fentiksSyncInterval = config.watchIntervals.fentiksSync;
+      const syncFentiks = async () => {
+        try {
+          logger.info('[Fentiks Sync] Scraping fentiks.pl and syncing to Drive...');
+          const fentiksSyncer = new FentiksSyncer(auth);
+          const count = await fentiksSyncer.syncFentiksToDrive();
+          logger.info(`[Fentiks Sync] Synced ${count} entries`);
+        } catch (error) {
+          logger.error('[Fentiks Sync] Error', error);
+        }
+      };
+
       await syncGmail();
       await runEmailAutomation();
       await checkDriveChanges();
+      await syncFentiks();
 
       const gmailInterval = setInterval(syncGmail, gmailSyncInterval);
       const emailInterval = setInterval(runEmailAutomation, emailAutomationInterval);
       const driveWatchIntervalId = setInterval(checkDriveChanges, driveWatchInterval);
+      const fentiksInterval = setInterval(syncFentiks, fentiksSyncInterval);
 
       const cleanup = () => {
         clearInterval(gmailInterval);
         clearInterval(emailInterval);
         clearInterval(driveWatchIntervalId);
+        clearInterval(fentiksInterval);
         logger.info('Stopping watch-all mode...');
         process.exit(0);
       };

@@ -7,6 +7,7 @@ import {
   buildGmailQuery,
   ParsedMessage,
 } from './parser.js';
+import { SpamFilter } from './spam-filter.js';
 
 const MILLIS_PER_DAY = 24 * 60 * 60 * 1000;
 const DEFAULT_DAYS_BACK = 180;
@@ -21,10 +22,12 @@ interface ProcessedEmail {
 export class GmailSyncer {
   private gmail: gmail_v1.Gmail;
   private driveService: GmailSyncerDriveService;
+  private spamFilter: SpamFilter;
 
   constructor(auth: any) {
     this.gmail = google.gmail({ version: 'v1', auth });
     this.driveService = new GmailSyncerDriveService(auth);
+    this.spamFilter = new SpamFilter();
   }
 
   private resolveStorageDetails(parsed: ParsedMessage): {
@@ -212,11 +215,36 @@ export class GmailSyncer {
 
     logger.info(`Found ${newMessages.length} new messages (${messages.length} total, ${messages.length - newMessages.length} already processed)`);
 
+    let spamCount = 0;
+
     for (const message of newMessages) {
       const parsed = parseMessage(message);
       if (!parsed) {
         logger.warn(`Failed to parse message ${message.id}`);
         continue;
+      }
+
+      // Classify email for spam/marketing
+      try {
+        logger.debug(`Classifying email: ${parsed.gmail.subject} from ${parsed.participants.from?.email}`);
+        const classification = await this.spamFilter.classifyEmail(parsed);
+        
+        if (classification.isSpam || classification.isMarketing) {
+          spamCount++;
+          logger.info(
+            `Skipping ${classification.isSpam ? 'spam' : 'marketing'} email: ${parsed.gmail.subject} (reason: ${classification.reason || 'unknown'}, confidence: ${classification.confidence || 0})`
+          );
+          // Still mark as processed to avoid re-checking
+          processedUpdates.push({
+            gmail_id: parsed.gmail.message_id,
+            received_internaldate_ms: parsed.gmail.received_internaldate_ms,
+            received_at: parsed.gmail.received_at,
+          });
+          continue;
+        }
+      } catch (error) {
+        logger.warn(`Error classifying email ${parsed.gmail.message_id}, proceeding anyway`, error);
+        // If classification fails, proceed with saving (fail-safe)
       }
 
       try {
@@ -254,12 +282,14 @@ export class GmailSyncer {
       await this.saveProcessedEmails(processedFileId, processedUpdates);
     }
 
-    logger.info(`Synced ${totalWritten} messages to Drive`);
+    logger.info(
+      `Synced ${totalWritten} messages to Drive (skipped ${spamCount} spam/marketing emails)`
+    );
     return totalWritten;
   }
 
   async syncNewMessages(): Promise<number> {
-    return await this.syncGmailToDrive(7);
+    return await this.syncGmailToDrive(DEFAULT_DAYS_BACK);
   }
 }
 

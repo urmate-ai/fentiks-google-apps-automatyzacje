@@ -92,18 +92,43 @@ Do NOT consider as quote requests:
     context: string
   ): Promise<ClassificationResult> {
     const ragContext = await this.ragService.retrieveContext(`${subject}\n\n${body}`);
+    
+    if (ragContext) {
+      logger.info(`RAG context retrieved (length: ${ragContext.length} chars)`);
+      logger.debug(`Full RAG context:\n${ragContext}`);
+    } else {
+      logger.warn('No RAG context found - will use template classification');
+    }
 
     const systemPrompt = [
       config.systemContext ||
         "You are Mateusz Janota's private email assistant trained on the history of his mailbox. Respond to emails on his behalf.",
-      'Use only the provided context and the documents retrieved via RAG.',
+      '',
+      'CRITICAL INSTRUCTIONS FOR RAG CONTEXT:',
+      '1. The RAG RETRIEVED CONTEXT contains search results ordered by relevance (highest similarity first).',
+      '2. Results marked with "⭐ HIGHEST PRIORITY" have the highest similarity and are most likely to contain the answer.',
+      '3. ALWAYS check the FIRST result in RAG context FIRST - it has the highest similarity score.',
+      '4. If the first result contains information that answers the email question, you MUST use it and classify as "ready".',
+      '5. Similarity scores above 0.55 are considered highly relevant - use them!',
+      '6. Ignore lower similarity results if a high-similarity result already answers the question.',
+      '',
       'Return ONLY valid JSON with keys {"classification":"ready|template|ignored","lang":"pl|en|other","response":string|null}.',
       'If classification="ignored" then response must be null.',
-      'If "ready" create a full HTML reply in detected language.',
-      'If "template" create a brief HTML reply skeleton with [____] placeholders.',
-      'Do not use signature in the response. Signature is added by the script after the response is generated.',
-      'Always end the message politely with a closing phrase, such as "Z poważaniem," (for Polish) or "Best regards," (for English), but without any name or signature after it.',
-      'Use <br> for new lines. Placeholders must be exactly four underscores inside square brackets.',
+      '',
+      'CLASSIFICATION RULES:',
+      '- Use "ignored" ONLY for: spam, automated notifications, no-reply emails, or emails that clearly do not require a response. If the email asks a question or requires any response, do NOT use "ignored".',
+      '- Use "ready" when RAG RETRIEVED CONTEXT (especially the FIRST/HIGHEST PRIORITY result) contains sufficient information to answer the email completely. YOU MUST extract and use the actual data from RAG context in your response.',
+      '- Use "template" ONLY when RAG RETRIEVED CONTEXT does NOT contain the needed information, or when the information is incomplete.',
+      '- CRITICAL: If RAG context shows "⭐ HIGHEST PRIORITY" or has similarity > 0.55 and contains relevant data, you MUST use "ready" classification and provide the full answer using that data.',
+      '- Example: If email asks "Ile wynosiły zyski firmy w 2025?" and RAG context contains "Zyski naszej firmy wyniosły 3 mln złotych", you MUST respond with "ready" and answer "Zyski naszej firmy wyniosły 3 mln złotych".',
+      '- Do NOT say "nie dysponujemy takimi informacjami" if the information IS in the RAG RETRIEVED CONTEXT, especially in the first/highest priority result. Read it carefully!',
+      '',
+      'RESPONSE FORMAT:',
+      '- If "ready": create a full HTML reply in detected language using data from RAG context. Extract the actual numbers, facts, and information from RAG context.',
+      '- If "template": create a brief HTML reply skeleton with [____] placeholders only when data is missing from RAG context.',
+      '- Do not use signature in the response. Signature is added by the script after the response is generated.',
+      '- Always end the message politely with a closing phrase, such as "Z poważaniem," (for Polish) or "Best regards," (for English), but without any name or signature after it.',
+      '- Use <br> for new lines. Placeholders must be exactly four underscores inside square brackets: [____].',
     ]
       .filter(Boolean)
       .join(' ');
@@ -397,19 +422,107 @@ Do NOT consider as quote requests:
     }
   }
 
-  private async addLabel(threadId: string, labelName: string): Promise<void> {
+  async ensureLabelsExist(): Promise<void> {
+    const labelsToCreate = [
+      config.gmailLabels.ready,
+      config.gmailLabels.template,
+      config.gmailLabels.failed,
+      config.gmailLabels.ignored,
+    ].filter((label): label is string => Boolean(label));
+
+    logger.info(`Ensuring ${labelsToCreate.length} labels exist...`);
+
+    for (const labelName of labelsToCreate) {
+      const labelId = await this.ensureLabelExists(labelName);
+      if (labelId) {
+        await this.setLabelColor(labelName, labelId);
+      }
+    }
+
+    logger.info('All labels are ready with colors');
+  }
+
+  private async setLabelColor(labelName: string, labelId: string): Promise<void> {
+    try {
+      let color: { backgroundColor: string; textColor: string } | null = null;
+
+      if (labelName === config.gmailLabels.failed) {
+        color = { backgroundColor: '#ffad47', textColor: '#000000' };
+      } else if (labelName === config.gmailLabels.ready) {
+        color = { backgroundColor: '#16a766', textColor: '#ffffff' };
+      } else if (labelName === config.gmailLabels.template) {
+        color = { backgroundColor: '#3c78d8', textColor: '#ffffff' };
+      } else if (labelName === config.gmailLabels.ignored) {
+        color = null;
+      }
+
+      if (color) {
+        await this.gmail.users.labels.patch({
+          userId: 'me',
+          id: labelId,
+          requestBody: {
+            color,
+          },
+        });
+        logger.info(`Set color for label ${labelName}: ${color.backgroundColor}`);
+      }
+    } catch (error) {
+      logger.warn(`Failed to set color for label ${labelName}`, error);
+    }
+  }
+
+  private async ensureLabelExists(labelName: string): Promise<string | null> {
+    if (!labelName) return null;
+    
     try {
       const labels = await this.gmail.users.labels.list({ userId: 'me' });
-      const label = labels.data.labels?.find((l) => l.name === labelName);
+      const existingLabel = labels.data.labels?.find((l) => l.name === labelName);
 
-      if (label && label.id) {
+      if (existingLabel?.id) {
+        logger.debug(`Label ${labelName} already exists`);
+        await this.setLabelColor(labelName, existingLabel.id);
+        return existingLabel.id;
+      }
+
+      logger.info(`Creating label: ${labelName}`);
+      const newLabel = await this.gmail.users.labels.create({
+        userId: 'me',
+        requestBody: {
+          name: labelName,
+          labelListVisibility: 'labelShow',
+          messageListVisibility: 'show',
+        },
+      });
+
+      if (newLabel.data.id) {
+        logger.info(`Label ${labelName} created with ID: ${newLabel.data.id}`);
+        return newLabel.data.id;
+      }
+
+      return null;
+    } catch (error) {
+      logger.error(`Failed to ensure label exists: ${labelName}`, error);
+      return null;
+    }
+  }
+
+  private async addLabel(threadId: string, labelName: string): Promise<void> {
+    if (!labelName) return;
+    
+    try {
+      const labelId = await this.ensureLabelExists(labelName);
+      
+      if (labelId) {
         await this.gmail.users.threads.modify({
           userId: 'me',
           id: threadId,
           requestBody: {
-            addLabelIds: [label.id],
+            addLabelIds: [labelId],
           },
         });
+        logger.debug(`Added label ${labelName} to thread ${threadId}`);
+      } else {
+        logger.warn(`Could not add label ${labelName} - label creation failed`);
       }
     } catch (error) {
       logger.warn(`Failed to add label ${labelName}`, error);

@@ -16,6 +16,7 @@
     "gmail:sync": "npm run build && node dist/index.js --gmail-sync",
     "gmail:sync:full": "npm run build && node dist/index.js --gmail-sync --full-sync",
     "gmail:watch": "npm run build && node dist/index.js --gmail-sync --watch",
+    "fentiks:sync": "npm run build && node dist/index.js --fentiks-sync",
     "email:automation": "npm run build && node dist/index.js --email-automation",
     "run:all": "npm run build && node dist/index.js --all",
     "watch:all": "npm run build && node dist/index.js --watch-all"

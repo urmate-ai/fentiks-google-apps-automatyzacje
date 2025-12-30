@@ -57,6 +57,12 @@ GMAIL_LABEL_FAILED=AI-Failed
 
 # Logging (opcjonalne)
 LOG_LEVEL=Information
+
+# Watch intervals (opcjonalne, w minutach)
+WATCH_GMAIL_SYNC_INTERVAL_MIN=5
+WATCH_EMAIL_AUTOMATION_INTERVAL_MIN=10
+WATCH_DRIVE_WATCH_INTERVAL_MIN=15
+WATCH_FENTIKS_SYNC_INTERVAL_MIN=60
 ```
 
 ### Opcjonalne
