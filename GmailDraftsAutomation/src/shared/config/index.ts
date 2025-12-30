@@ -46,6 +46,18 @@ const ConfigSchema = z.object({
   
   scheduleTargetFolderId: z.string().optional(),
   scheduleFileFormat: z.enum(['json', 'csv']).default('json'),
+  
+  watchIntervals: z.object({
+    gmailSync: z.number().positive().default(5 * 60 * 1000),
+    emailAutomation: z.number().positive().default(10 * 60 * 1000),
+    driveWatch: z.number().positive().default(15 * 60 * 1000),
+    fentiksSync: z.number().positive().default(60 * 60 * 1000),
+  }).default({
+    gmailSync: 5 * 60 * 1000,
+    emailAutomation: 10 * 60 * 1000,
+    driveWatch: 15 * 60 * 1000,
+    fentiksSync: 60 * 60 * 1000,
+  }),
 });
 
 type Config = z.infer<typeof ConfigSchema>;
@@ -90,6 +102,20 @@ function loadConfig(): Config {
     driveTargetFolderId: process.env.TARGET_FOLDER_ID,
     scheduleTargetFolderId: process.env.SCHEDULE_SCRAPER_TARGET_FOLDER_ID,
     scheduleFileFormat: process.env.SCHEDULE_SCRAPER_FILE_FORMAT,
+    watchIntervals: {
+      gmailSync: process.env.WATCH_GMAIL_SYNC_INTERVAL_MIN
+        ? parseFloat(process.env.WATCH_GMAIL_SYNC_INTERVAL_MIN) * 60 * 1000
+        : undefined,
+      emailAutomation: process.env.WATCH_EMAIL_AUTOMATION_INTERVAL_MIN
+        ? parseFloat(process.env.WATCH_EMAIL_AUTOMATION_INTERVAL_MIN) * 60 * 1000
+        : undefined,
+      driveWatch: process.env.WATCH_DRIVE_WATCH_INTERVAL_MIN
+        ? parseFloat(process.env.WATCH_DRIVE_WATCH_INTERVAL_MIN) * 60 * 1000
+        : undefined,
+      fentiksSync: process.env.WATCH_FENTIKS_SYNC_INTERVAL_MIN
+        ? parseFloat(process.env.WATCH_FENTIKS_SYNC_INTERVAL_MIN) * 60 * 1000
+        : undefined,
+    },
   };
         
   if (!rawConfig.openaiApiKey && !rawConfig.googleGenAiApiKey) {

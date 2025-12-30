@@ -34,7 +34,7 @@ export class RagService {
 
       const allResults = await this.vectorStore.searchSimilar(
         queryEmbedding,
-        config.ragTopK,
+        Math.max(config.ragTopK * 2, 10), 
         0.0
       );
       
@@ -68,8 +68,13 @@ export class RagService {
           logger.info(`RAG result ${index + 1}: similarity=${result.similarity.toFixed(3)}, content length=${result.content.length}`);
         });
 
-        const contextParts = results.map((result, index) => {
-          return `[Context ${index + 1}]\n${result.content}\n(Similarity: ${result.similarity.toFixed(3)})`;
+        const sortedResults = results.sort((a, b) => b.similarity - a.similarity);
+        
+        const topResults = sortedResults.slice(0, Math.min(config.ragTopK, sortedResults.length));
+        
+        const contextParts = topResults.map((result, index) => {
+          const priority = index === 0 && result.similarity > 0.55 ? '⭐ HIGHEST PRIORITY - USE THIS DATA ⭐' : '';
+          return `${priority ? `${priority}\n` : ''}[Context ${index + 1} - Similarity: ${result.similarity.toFixed(3)}]\n${result.content}`;
         });
 
         return contextParts.join('\n\n---\n\n');

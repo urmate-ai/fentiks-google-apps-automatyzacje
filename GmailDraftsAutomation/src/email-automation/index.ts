@@ -12,7 +12,9 @@ export class EmailAutomation {
   }
 
   async setup(): Promise<void> {
-    logger.info('Setup complete - labels will be created on first use');
+    logger.info('Setting up email automation...');
+    await this.gmailService.ensureLabelsExist();
+    logger.info('Setup complete - all labels are ready');
   }
 
   async main(): Promise<void> {

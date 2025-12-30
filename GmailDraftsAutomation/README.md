@@ -60,6 +60,12 @@ Postępuj zgodnie z instrukcjami, aby uzyskać `GOOGLE_REFRESH_TOKEN` i dodaj go
    - `DATABASE_URL` - connection string do PostgreSQL
    - `OPENAI_API_KEY` lub `GOOGLE_GEN_AI_API_KEY` - klucz API do LLM
    - `RAG_REFRESHER_ROOT_FOLDER_ID` - ID folderu Google Drive z dokumentami
+   
+   **Opcjonalne - interwały dla `watch:all` (w minutach):**
+   - `WATCH_GMAIL_SYNC_INTERVAL_MIN` - interwał synchronizacji Gmail (domyślnie: 5)
+   - `WATCH_EMAIL_AUTOMATION_INTERVAL_MIN` - interwał automatyzacji emaili (domyślnie: 10)
+   - `WATCH_DRIVE_WATCH_INTERVAL_MIN` - interwał sprawdzania zmian w Drive (domyślnie: 15)
+   - `WATCH_FENTIKS_SYNC_INTERVAL_MIN` - interwał scrapingu fentiks.pl (domyślnie: 60)
 
 ## Uruchomienie
 
@@ -96,10 +102,11 @@ npm run gmail:watch
 - `npm run email:automation` - Automatyczne generowanie odpowiedzi na maile
 - `npm run run:all` - Uruchomienie wszystkich modułów (jednorazowo)
 - `npm run watch:all` - **Tryb ciągły** - uruchamia wszystko w tle:
-  - Gmail sync co 5 minut
+  - Gmail sync (domyślnie co 5 minut, konfigurowalne przez `WATCH_GMAIL_SYNC_INTERVAL_MIN`)
   - RAG refresh po nowych mailach
-  - **Drive folder watch co 15 minut** - automatycznie ładuje nowe/zmienione pliki z Drive do bazy
-  - Email automation co 10 minut
+  - **Drive folder watch** (domyślnie co 15 minut, konfigurowalne przez `WATCH_DRIVE_WATCH_INTERVAL_MIN`) - automatycznie ładuje nowe/zmienione pliki z Drive do bazy
+  - Email automation (domyślnie co 10 minut, konfigurowalne przez `WATCH_EMAIL_AUTOMATION_INTERVAL_MIN`)
+  - Fentiks scraping (domyślnie co 1 godzinę, konfigurowalne przez `WATCH_FENTIKS_SYNC_INTERVAL_MIN`)
 - `npm run gmail:sync` - Synchronizacja maili z Gmail do Drive (7 dni)
 - `npm run gmail:sync:full` - Pełna synchronizacja maili (180 dni)
 - `npm run gmail:watch` - Gmail sync w trybie watch (tylko nowe maile)
