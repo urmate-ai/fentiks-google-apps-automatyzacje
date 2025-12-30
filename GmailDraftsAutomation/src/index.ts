@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+import http from 'http';
 import { initializeDatabase, closePool } from './shared/database/index.js';
 import { logger } from './shared/logger/index.js';
 import { config } from './shared/config/index.js';
@@ -9,9 +10,34 @@ import { EmailAutomation } from './email-automation/index.js';
 import { GmailSyncer } from './gmail-syncer/index.js';
 import { FentiksSyncer } from './fentiks-syncer/index.js';
 
+function startHealthServer() {
+  const port = parseInt(process.env.PORT || '8080', 10);
+  const server = http.createServer((req, res) => {
+    if (req.url === '/health' || req.url === '/') {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ 
+        status: 'ok', 
+        service: 'gmail-drafts-automation',
+        timestamp: new Date().toISOString() 
+      }));
+    } else {
+      res.writeHead(404, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'Not found' }));
+    }
+  });
+
+  server.listen(port, '0.0.0.0', () => {
+    logger.info(`Health check server listening on port ${port}`);
+  });
+
+  return server;
+}
+
 async function main() {
   try {
     logger.info('Starting Gmail Drafts Automation');
+
+    const healthServer = startHealthServer();
 
     await initializeDatabase();
 
@@ -187,15 +213,27 @@ async function main() {
       process.on('SIGTERM', cleanup);
 
       logger.info('Watch mode active. Waiting for tasks...');
+      
       return;
     }
 
     logger.info('Completed successfully');
+    
+    if (!process.argv.includes('--watch') && !process.argv.includes('--watch-all')) {
+      setTimeout(async () => {
+        logger.info('Shutting down health server...');
+        healthServer.close();
+        await closePool();
+        process.exit(0);
+      }, 5000);
+    }
   } catch (error) {
     logger.error('Fatal error', error);
     process.exit(1);
   } finally {
-    await closePool();
+    if (!process.argv.includes('--watch') && !process.argv.includes('--watch-all')) {
+      await closePool();
+    }
   }
 }
 
