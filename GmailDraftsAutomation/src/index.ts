@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import http from 'http';
+import { URL } from 'url';
 import { initializeDatabase, closePool } from './shared/database/index.js';
 import { logger } from './shared/logger/index.js';
 import { config } from './shared/config/index.js';
@@ -9,25 +10,154 @@ import { RagRefresher } from './rag-refresher/index.js';
 import { EmailAutomation } from './email-automation/index.js';
 import { GmailSyncer } from './gmail-syncer/index.js';
 import { FentiksSyncer } from './fentiks-syncer/index.js';
+import { ChatService } from './chat-api/index.js';
 
-function startHealthServer() {
+function verifyApiKey(req: http.IncomingMessage): boolean {
+  if (!config.chatApiKey) {
+    return false;
+  }
+
+  const authHeader = req.headers.authorization;
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    const providedKey = authHeader.substring(7);
+    return providedKey === config.chatApiKey;
+  }
+
+  const apiKeyHeader = req.headers['x-api-key'];
+  if (apiKeyHeader && typeof apiKeyHeader === 'string') {
+    return apiKeyHeader === config.chatApiKey;
+  }
+
+  const url = new URL(req.url || '', `http://${req.headers.host}`);
+  const queryKey = url.searchParams.get('api_key');
+  if (queryKey) {
+    return queryKey === config.chatApiKey;
+  }
+
+  return false;
+}
+
+function parseRequestBody(req: http.IncomingMessage): Promise<any> {
+  return new Promise((resolve, reject) => {
+    let body = '';
+    req.on('data', (chunk) => {
+      body += chunk.toString();
+    });
+    req.on('end', () => {
+      try {
+        if (!body) {
+          resolve({});
+          return;
+        }
+        resolve(JSON.parse(body));
+      } catch (error) {
+        reject(error);
+      }
+    });
+    req.on('error', reject);
+  });
+}
+
+function startHealthServer(chatService: ChatService | null) {
   const port = parseInt(process.env.PORT || '8080', 10);
-  const server = http.createServer((req, res) => {
-    if (req.url === '/health' || req.url === '/') {
-      res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ 
-        status: 'ok', 
-        service: 'gmail-drafts-automation',
-        timestamp: new Date().toISOString() 
-      }));
-    } else {
-      res.writeHead(404, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ error: 'Not found' }));
+  const server = http.createServer(async (req, res) => {
+    const url = new URL(req.url || '', `http://${req.headers.host}`);
+    const path = url.pathname;
+
+    const corsHeaders = {
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-API-Key',
+    };
+
+    if (req.method === 'OPTIONS') {
+      res.writeHead(200, corsHeaders);
+      res.end();
+      return;
     }
+
+    if ((path === '/health' || path === '/') && req.method === 'GET') {
+      res.writeHead(200, { 'Content-Type': 'application/json', ...corsHeaders });
+      res.end(
+        JSON.stringify({
+          status: 'ok',
+          service: 'gmail-drafts-automation',
+          timestamp: new Date().toISOString(),
+          chatApiEnabled: !!config.chatApiKey && !!chatService,
+        })
+      );
+      return;
+    }
+
+    if ((path === '/api/v1/chat' || path === '/api/chat') && req.method === 'POST') {
+      if (!verifyApiKey(req)) {
+        logger.warn(`[Chat API] Unauthorized request from ${req.headers['x-forwarded-for'] || req.socket.remoteAddress}`);
+        res.writeHead(401, { 'Content-Type': 'application/json', ...corsHeaders });
+        res.end(JSON.stringify({ error: 'Unauthorized. Provide valid API key via Authorization: Bearer <key>, X-API-Key header, or ?api_key= query parameter.' }));
+        return;
+      }
+
+      if (!chatService) {
+        res.writeHead(503, { 'Content-Type': 'application/json', ...corsHeaders });
+        res.end(JSON.stringify({ error: 'Chat service not available' }));
+        return;
+      }
+
+      try {
+        const body = await parseRequestBody(req);
+        const { message, conversationHistory, context } = body;
+
+        if (!message || typeof message !== 'string') {
+          res.writeHead(400, { 'Content-Type': 'application/json', ...corsHeaders });
+          res.end(JSON.stringify({ error: 'Missing or invalid "message" field' }));
+          return;
+        }
+
+        logger.info(`[Chat API] Processing chat request (message length: ${message.length})`);
+
+        const response = await chatService.processMessage({
+          message,
+          conversationHistory,
+          context,
+        });
+
+        if (response.error) {
+          res.writeHead(500, { 'Content-Type': 'application/json', ...corsHeaders });
+          res.end(JSON.stringify({ error: response.error }));
+          return;
+        }
+
+        res.writeHead(200, { 'Content-Type': 'application/json', ...corsHeaders });
+        res.end(
+          JSON.stringify({
+            response: response.response,
+            contextUsed: response.contextUsed,
+          })
+        );
+      } catch (error) {
+        logger.error('[Chat API] Error handling request', error);
+        res.writeHead(500, { 'Content-Type': 'application/json', ...corsHeaders });
+        res.end(
+          JSON.stringify({
+            error: error instanceof Error ? error.message : 'Internal server error',
+          })
+        );
+      }
+      return;
+    }
+
+    res.writeHead(404, { 'Content-Type': 'application/json', ...corsHeaders });
+    res.end(JSON.stringify({ error: 'Not found' }));
   });
 
   server.listen(port, '0.0.0.0', () => {
-    logger.info(`Health check server listening on port ${port}`);
+    logger.info(`HTTP server listening on port ${port}`);
+    if (config.chatApiKey) {
+      logger.info(`Chat API enabled at /api/v1/chat (protected by API key)`);
+      logger.info(`Legacy endpoint /api/chat also available (will be deprecated)`);
+    } else {
+      logger.warn('Chat API disabled - set CHAT_API_KEY environment variable to enable');
+    }
   });
 
   return server;
@@ -37,9 +167,15 @@ async function main() {
   try {
     logger.info('Starting Gmail Drafts Automation');
 
-    const healthServer = startHealthServer();
-
     await initializeDatabase();
+    
+    let chatService: ChatService | null = null;
+    if (config.chatApiKey) {
+      chatService = new ChatService();
+      logger.info('Chat service initialized');
+    }
+
+    const healthServer = startHealthServer(chatService);
 
     const refreshToken = process.env.GOOGLE_REFRESH_TOKEN;
     if (!refreshToken) {

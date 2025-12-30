@@ -47,6 +47,8 @@ const ConfigSchema = z.object({
   scheduleTargetFolderId: z.string().optional(),
   scheduleFileFormat: z.enum(['json', 'csv']).default('json'),
   
+  chatApiKey: z.string().optional(),
+  
   watchIntervals: z.object({
     gmailSync: z.number().positive().default(5 * 60 * 1000),
     emailAutomation: z.number().positive().default(10 * 60 * 1000),
@@ -102,6 +104,7 @@ function loadConfig(): Config {
     driveTargetFolderId: process.env.TARGET_FOLDER_ID,
     scheduleTargetFolderId: process.env.SCHEDULE_SCRAPER_TARGET_FOLDER_ID,
     scheduleFileFormat: process.env.SCHEDULE_SCRAPER_FILE_FORMAT,
+    chatApiKey: process.env.CHAT_API_KEY,
     watchIntervals: {
       gmailSync: process.env.WATCH_GMAIL_SYNC_INTERVAL_MIN
         ? parseFloat(process.env.WATCH_GMAIL_SYNC_INTERVAL_MIN) * 60 * 1000
