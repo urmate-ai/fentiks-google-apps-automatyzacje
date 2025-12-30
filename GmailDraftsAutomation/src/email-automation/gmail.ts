@@ -182,6 +182,8 @@ Do NOT consider as quote requests:
       .filter(Boolean)
       .join(' ');
 
+    logger.info(`[Email Automation] Searching for candidate threads with query: ${query}`);
+    
     const response = await this.gmail.users.threads.list({
       userId: 'me',
       q: query,
@@ -189,6 +191,36 @@ Do NOT consider as quote requests:
     });
 
     const threads = response.data.threads || [];
+    logger.info(`[Email Automation] Found ${threads.length} candidate threads (limit: ${limit})`);
+
+    if (threads.length === 0) {
+      logger.info('[Email Automation] No threads found with strict query. Trying broader searches...');
+      
+      const unreadQuery = 'in:inbox is:unread newer_than:14d';
+      const unreadResponse = await this.gmail.users.threads.list({
+        userId: 'me',
+        q: unreadQuery,
+        maxResults: 5,
+      });
+      logger.info(`[Email Automation] Unread emails (any): ${unreadResponse.data.threads?.length || 0}`);
+      
+      const inboxQuery = 'in:inbox newer_than:14d';
+      const inboxResponse = await this.gmail.users.threads.list({
+        userId: 'me',
+        q: inboxQuery,
+        maxResults: 5,
+      });
+      logger.info(`[Email Automation] Inbox emails (read+unread): ${inboxResponse.data.threads?.length || 0}`);
+      
+      const readyQuery = `label:${config.gmailLabels.ready} newer_than:14d`;
+      const readyResponse = await this.gmail.users.threads.list({
+        userId: 'me',
+        q: readyQuery,
+        maxResults: 5,
+      });
+      logger.info(`[Email Automation] Emails with "${config.gmailLabels.ready}" label: ${readyResponse.data.threads?.length || 0}`);
+    }
+    
     return threads.map((t) => t as gmail_v1.Schema$Thread);
   }
 
@@ -205,6 +237,8 @@ Do NOT consider as quote requests:
       .filter(Boolean)
       .join(' ');
 
+    logger.info(`[Email Automation] Searching for failed threads with query: ${query}`);
+    
     const response = await this.gmail.users.threads.list({
       userId: 'me',
       q: query,
@@ -212,6 +246,8 @@ Do NOT consider as quote requests:
     });
 
     const threads = response.data.threads || [];
+    logger.info(`[Email Automation] Found ${threads.length} failed threads (limit: ${limit})`);
+    
     return threads.map((t) => t as gmail_v1.Schema$Thread);
   }
 
