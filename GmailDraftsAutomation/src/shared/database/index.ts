@@ -53,6 +53,26 @@ export async function initializeDatabase(): Promise<void> {
   try {
     await client.query('CREATE EXTENSION IF NOT EXISTS vector');
     logger.info('Database initialized with pgvector extension');
+    
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS oauth_tokens (
+        id SERIAL PRIMARY KEY,
+        provider VARCHAR(50) NOT NULL DEFAULT 'google',
+        refresh_token TEXT NOT NULL,
+        access_token TEXT,
+        expires_at TIMESTAMP,
+        scopes TEXT[],
+        created_at TIMESTAMP DEFAULT NOW(),
+        updated_at TIMESTAMP DEFAULT NOW(),
+        UNIQUE(provider)
+      )
+    `);
+    
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS oauth_tokens_provider_idx ON oauth_tokens(provider)
+    `);
+    
+    logger.info('OAuth tokens table initialized');
   } catch (error) {
     logger.error('Failed to initialize database', error);
     throw error;

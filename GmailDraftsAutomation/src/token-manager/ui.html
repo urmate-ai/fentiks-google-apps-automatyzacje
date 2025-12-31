@@ -1,0 +1,482 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Token Manager - Gmail Automation</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      background-color: #ffffff;
+      color: #000000;
+      line-height: 1.6;
+      padding: 20px;
+      min-height: 100vh;
+    }
+
+    .container {
+      max-width: 800px;
+      margin: 0 auto;
+      background: #ffffff;
+      border-radius: 8px;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+      padding: 40px;
+    }
+
+    h1 {
+      font-size: 28px;
+      font-weight: 600;
+      margin-bottom: 30px;
+      color: #000000;
+    }
+
+    .status-card {
+      background: #ffffff;
+      border: 2px solid #000000;
+      border-radius: 8px;
+      padding: 24px;
+      margin-bottom: 24px;
+    }
+
+    .status-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 20px;
+    }
+
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      padding: 8px 16px;
+      border-radius: 20px;
+      font-size: 14px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .status-badge.valid {
+      background-color: #000000;
+      color: #ffffff;
+    }
+
+    .status-badge.invalid {
+      background-color: #ffffff;
+      color: #000000;
+      border: 2px solid #000000;
+    }
+
+    .status-item {
+      display: flex;
+      justify-content: space-between;
+      padding: 12px 0;
+      border-bottom: 1px solid #e0e0e0;
+    }
+
+    .status-item:last-child {
+      border-bottom: none;
+    }
+
+    .status-label {
+      font-weight: 500;
+      color: #666666;
+    }
+
+    .status-value {
+      font-weight: 600;
+      color: #000000;
+      text-align: right;
+    }
+
+    .status-value.error {
+      color: #d32f2f;
+    }
+
+    .button {
+      background-color: #000000;
+      color: #ffffff;
+      border: 2px solid #000000;
+      padding: 14px 28px;
+      font-size: 16px;
+      font-weight: 600;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      width: 100%;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .button:hover:not(:disabled) {
+      background-color: #333333;
+      border-color: #333333;
+    }
+
+    .button:active:not(:disabled) {
+      background-color: #000000;
+      transform: scale(0.98);
+    }
+
+    .button:disabled {
+      background-color: #cccccc;
+      border-color: #cccccc;
+      color: #666666;
+      cursor: not-allowed;
+    }
+
+    .loading {
+      display: inline-block;
+      width: 16px;
+      height: 16px;
+      border: 2px solid #ffffff;
+      border-top-color: transparent;
+      border-radius: 50%;
+      animation: spin 0.6s linear infinite;
+      margin-right: 8px;
+      vertical-align: middle;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .message {
+      padding: 12px 16px;
+      border-radius: 6px;
+      margin-bottom: 20px;
+      font-size: 14px;
+      display: none;
+    }
+
+    .message.success {
+      background-color: #e8f5e9;
+      color: #2e7d32;
+      border: 1px solid #4caf50;
+      display: block;
+    }
+
+    .message.error {
+      background-color: #ffebee;
+      color: #c62828;
+      border: 1px solid #f44336;
+      display: block;
+    }
+
+    .scopes-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 8px;
+    }
+
+    .scope-badge {
+      background-color: #f5f5f5;
+      color: #000000;
+      padding: 4px 12px;
+      border-radius: 12px;
+      font-size: 12px;
+      border: 1px solid #e0e0e0;
+    }
+
+    .time-remaining {
+      font-size: 18px;
+      font-weight: 700;
+    }
+
+    .time-remaining.expired {
+      color: #d32f2f;
+    }
+
+    .time-remaining.valid {
+      color: #000000;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Refresh Token Manager</h1>
+
+    <div id="message" class="message"></div>
+
+    <div class="status-card">
+      <div class="status-header">
+        <h2 style="font-size: 20px; font-weight: 600;">Status Refresh Tokena</h2>
+        <span id="statusBadge" class="status-badge invalid">Sprawdzanie...</span>
+      </div>
+
+      <div class="status-item">
+        <span class="status-label">Refresh Token ważny:</span>
+        <span id="isValid" class="status-value">-</span>
+      </div>
+
+      <div class="status-item">
+        <span class="status-label">Refresh Token skonfigurowany:</span>
+        <span id="hasRefreshToken" class="status-value">-</span>
+      </div>
+
+      <div class="status-item">
+        <span class="status-label">Ostatnie odświeżenie Access Tokena:</span>
+        <span id="lastAccessTokenRefresh" class="status-value">-</span>
+      </div>
+
+      <div class="status-item">
+        <span class="status-label">Ostatnie sprawdzenie:</span>
+        <span id="lastChecked" class="status-value">-</span>
+      </div>
+
+      <div class="status-item" id="errorItem" style="display: none;">
+        <span class="status-label">Błąd:</span>
+        <span id="error" class="status-value error">-</span>
+      </div>
+
+      <div class="status-item" id="scopesItem" style="display: none;">
+        <span class="status-label">Uprawnienia:</span>
+        <div class="status-value" style="text-align: right;">
+          <div id="scopes" class="scopes-list"></div>
+        </div>
+      </div>
+
+      <div style="margin-top: 20px; padding: 16px; background-color: #f5f5f5; border-radius: 6px; font-size: 14px; color: #666;">
+        <strong>ℹ️ Informacja:</strong> Refresh token nie wygasa automatycznie, ale może być unieważniony przez użytkownika w Google Account. Access token odświeża się automatycznie przy użyciu refresh tokena.
+      </div>
+    </div>
+
+    <div class="status-card" id="loginCard" style="display: none;">
+      <div class="status-header">
+        <h2 style="font-size: 20px; font-weight: 600;">Logowanie Google OAuth</h2>
+      </div>
+      
+      <div style="margin-bottom: 20px;">
+        <p style="margin-bottom: 16px; color: #666;">Aby wygenerować nowy refresh token:</p>
+        <ol style="padding-left: 20px; color: #666; line-height: 1.8;">
+          <li>Kliknij przycisk poniżej</li>
+          <li>Zaloguj się do swojego konta Google</li>
+          <li>Udziel uprawnień aplikacji</li>
+          <li>Token zostanie automatycznie zapisany</li>
+        </ol>
+      </div>
+
+      <div style="margin-bottom: 20px;">
+        <button id="authUrlButton" class="button" onclick="handleLogin()">
+          🔐 Zaloguj się przez Google
+        </button>
+      </div>
+    </div>
+
+    <button id="refreshButton" class="button" onclick="handleCheck()">
+      Sprawdź Refresh Token
+    </button>
+    
+    <button id="loginButton" class="button" onclick="showLogin()" style="margin-top: 12px; background-color: #ffffff; color: #000000; border: 2px solid #000000;">
+      Zaloguj się / Wygeneruj nowy token
+    </button>
+  </div>
+
+  <script>
+    let refreshInterval = null;
+
+    function formatDate(dateString) {
+      if (!dateString) return '-';
+      try {
+        const date = new Date(dateString);
+        return date.toLocaleString('pl-PL', {
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit',
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit'
+        });
+      } catch (e) {
+        return dateString;
+      }
+    }
+
+    function showMessage(text, type) {
+      const messageEl = document.getElementById('message');
+      messageEl.textContent = text;
+      messageEl.className = `message ${type}`;
+      setTimeout(() => {
+        messageEl.className = 'message';
+      }, 5000);
+    }
+
+    function updateUI(status) { 
+      const badge = document.getElementById('statusBadge');
+      if (status.isValid) {
+        badge.textContent = 'Ważny';
+        badge.className = 'status-badge valid';
+      } else {
+        badge.textContent = 'Nieważny';
+        badge.className = 'status-badge invalid';
+      }
+
+      document.getElementById('isValid').textContent = status.isValid ? 'Tak' : 'Nie';
+
+      document.getElementById('hasRefreshToken').textContent = status.hasRefreshToken ? 'Tak' : 'Nie';
+
+      document.getElementById('lastAccessTokenRefresh').textContent = formatDate(status.lastAccessTokenRefresh);
+
+      document.getElementById('lastChecked').textContent = formatDate(status.lastChecked);
+
+      const errorItem = document.getElementById('errorItem');
+      const errorEl = document.getElementById('error');
+      if (status.error) {
+        errorEl.textContent = status.error;
+        errorItem.style.display = 'flex';
+      } else {
+        errorItem.style.display = 'none';
+      }
+
+      const scopesItem = document.getElementById('scopesItem');
+      const scopesEl = document.getElementById('scopes');
+      if (status.scopes && status.scopes.length > 0) {
+        scopesEl.innerHTML = status.scopes.map(scope => 
+          `<span class="scope-badge">${scope}</span>`
+        ).join('');
+        scopesItem.style.display = 'flex';
+      } else {
+        scopesItem.style.display = 'none';
+      }
+    }
+
+    async function loadStatus() {
+      try {
+        const response = await fetch('/api/v1/token/status');
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
+        const status = await response.json();
+        updateUI(status);
+      } catch (error) {
+        console.error('Error loading status:', error);
+        updateUI({
+          isValid: false,
+          hasRefreshToken: false,
+          lastAccessTokenRefresh: null,
+          scopes: [],
+          error: `Błąd ładowania: ${error.message}`,
+          lastChecked: new Date().toISOString()
+        });
+      }
+    }
+
+    async function handleCheck() {
+      const button = document.getElementById('refreshButton');
+      const originalText = button.textContent;
+      
+      button.disabled = true;
+      button.innerHTML = '<span class="loading"></span> Sprawdzanie...';
+
+      try {
+        const response = await fetch('/api/v1/token/check', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          }
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+          showMessage('Refresh token jest ważny!', 'success');
+          updateUI(data.status);
+        } else {
+          showMessage(`Błąd: ${data.error || 'Nieznany błąd'}`, 'error');
+          if (data.status) {
+            updateUI(data.status);
+          }
+        }
+      } catch (error) {
+        showMessage(`Błąd: ${error.message}`, 'error');
+      } finally {
+        button.disabled = false;
+        button.textContent = originalText;
+      }
+    }
+
+    function showLogin() {
+      const loginCard = document.getElementById('loginCard');
+      const loginButton = document.getElementById('loginButton');
+      if (loginCard.style.display === 'none') {
+        loginCard.style.display = 'block';
+        loginButton.textContent = 'Ukryj logowanie';
+      } else {
+        loginCard.style.display = 'none';
+        loginButton.textContent = 'Zaloguj się / Wygeneruj nowy token';
+      }
+    }
+
+    async function handleLogin() {
+      const button = document.getElementById('authUrlButton');
+      const originalText = button.textContent;
+      
+      button.disabled = true;
+      button.innerHTML = '<span class="loading"></span> Pobieranie URL...';
+
+      try {
+        const response = await fetch('/api/v1/oauth/auth-url');
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
+        const data = await response.json();
+        
+        // Open OAuth in popup window
+        const width = 600;
+        const height = 700;
+        const left = (screen.width - width) / 2;
+        const top = (screen.height - height) / 2;
+        
+        const popup = window.open(
+          data.authUrl,
+          'Google OAuth',
+          `width=${width},height=${height},left=${left},top=${top},toolbar=no,menubar=no`
+        );
+        
+        showMessage('Okno logowania zostało otwarte. Zaloguj się i udziel uprawnień.', 'success');
+        
+        // Check if popup was closed and reload status
+        const checkPopup = setInterval(() => {
+          if (popup && popup.closed) {
+            clearInterval(checkPopup);
+            showMessage('Sprawdzanie statusu tokena...', 'success');
+            setTimeout(() => {
+              loadStatus();
+              document.getElementById('loginCard').style.display = 'none';
+              document.getElementById('loginButton').textContent = 'Zaloguj się / Wygeneruj nowy token';
+            }, 1000);
+          }
+        }, 500);
+        
+      } catch (error) {
+        showMessage(`Błąd: ${error.message}`, 'error');
+      } finally {
+        button.disabled = false;
+        button.innerHTML = originalText;
+      }
+    }
+
+    // Show login section if no refresh token
+    loadStatus().then(() => {
+      // Check if we have a valid token after loading status
+      setTimeout(() => {
+        const hasToken = document.getElementById('hasRefreshToken').textContent === 'Tak';
+        if (!hasToken) {
+          document.getElementById('loginCard').style.display = 'block';
+        }
+      }, 500);
+    });
+
+    refreshInterval = setInterval(loadStatus, 30000);
+  </script>
+</body>
+</html>
+
+

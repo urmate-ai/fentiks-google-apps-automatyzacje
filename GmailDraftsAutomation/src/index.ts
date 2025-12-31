@@ -5,12 +5,13 @@ import { URL } from 'url';
 import { initializeDatabase, closePool } from './shared/database/index.js';
 import { logger } from './shared/logger/index.js';
 import { config } from './shared/config/index.js';
-import { getAuthenticatedClient } from './auth/google.js';
+import { getAuthenticatedClient, generateAuthUrl, exchangeCodeForTokens, createGoogleAuth } from './auth/google.js';
 import { RagRefresher } from './rag-refresher/index.js';
 import { EmailAutomation } from './email-automation/index.js';
 import { GmailSyncer } from './gmail-syncer/index.js';
 import { FentiksSyncer } from './fentiks-syncer/index.js';
 import { ChatService } from './chat-api/index.js';
+import { checkTokenStatus, checkRefreshToken } from './token-manager/index.js';
 
 function verifyApiKey(req: http.IncomingMessage): boolean {
   if (!config.chatApiKey) {
@@ -89,6 +90,186 @@ function startHealthServer(chatService: ChatService | null) {
       return;
     }
 
+    if (path === '/token' && req.method === 'GET') {
+      try {
+        const fs = await import('fs/promises');
+        const pathModule = await import('path');
+        const { fileURLToPath } = await import('url');
+        const __filename = fileURLToPath(import.meta.url);
+        const __dirname = pathModule.dirname(__filename);
+        
+        const baseDir = __dirname.endsWith('dist') 
+          ? pathModule.join(__dirname, '..', 'src')
+          : __dirname;
+        
+        const uiPath = pathModule.join(baseDir, 'token-manager', 'ui.html');
+        const html = await fs.readFile(uiPath, 'utf-8');
+        
+        res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+        res.end(html);
+      } catch (error) {
+        logger.error('[Token UI] Error serving UI', error);
+        res.writeHead(500, { 'Content-Type': 'text/plain' });
+        res.end('Error loading token manager UI');
+      }
+      return;
+    }
+
+    if (path === '/api/v1/oauth/auth-url' && req.method === 'GET') {
+      try {
+        const authUrl = generateAuthUrl(true);
+        res.writeHead(200, { 'Content-Type': 'application/json', ...corsHeaders });
+        res.end(JSON.stringify({ authUrl }));
+      } catch (error) {
+        logger.error('[OAuth API] Error generating auth URL', error);
+        res.writeHead(500, { 'Content-Type': 'application/json', ...corsHeaders });
+        res.end(JSON.stringify({
+          error: error instanceof Error ? error.message : 'Unknown error',
+        }));
+      }
+      return;
+    }
+
+    if (path === '/oauth/callback' && req.method === 'GET') {
+      try {
+        const url = new URL(req.url || '', `http://${req.headers.host}`);
+        const code = url.searchParams.get('code');
+        const error = url.searchParams.get('error');
+
+        if (error) {
+          res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+          res.end(`
+            <!DOCTYPE html>
+            <html>
+            <head>
+              <title>Błąd autoryzacji</title>
+              <style>
+                body { font-family: Arial, sans-serif; max-width: 600px; margin: 50px auto; padding: 20px; text-align: center; }
+                .error { color: #d32f2f; font-size: 18px; margin: 20px 0; }
+                .button { display: inline-block; padding: 12px 24px; background: #000; color: #fff; text-decoration: none; border-radius: 6px; margin-top: 20px; }
+              </style>
+            </head>
+            <body>
+              <h1>❌ Błąd autoryzacji</h1>
+              <p class="error">Autoryzacja została anulowana lub wystąpił błąd: ${error}</p>
+              <a href="/token" class="button">Powrót do Token Manager</a>
+            </body>
+            </html>
+          `);
+          return;
+        }
+
+        if (!code) {
+          res.writeHead(400, { 'Content-Type': 'text/html; charset=utf-8' });
+          res.end(`
+            <!DOCTYPE html>
+            <html>
+            <head>
+              <title>Błąd</title>
+              <style>
+                body { font-family: Arial, sans-serif; max-width: 600px; margin: 50px auto; padding: 20px; text-align: center; }
+                .error { color: #d32f2f; }
+              </style>
+            </head>
+            <body>
+              <h1 class="error">Błąd: Brak kodu autoryzacji</h1>
+              <a href="/token">Powrót</a>
+            </body>
+            </html>
+          `);
+          return;
+        }
+
+        await exchangeCodeForTokens(code, true);
+        
+        res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+        res.end(`
+          <!DOCTYPE html>
+          <html>
+          <head>
+            <title>Autoryzacja zakończona</title>
+            <style>
+              body { font-family: Arial, sans-serif; max-width: 600px; margin: 50px auto; padding: 20px; text-align: center; }
+              .success { color: #2e7d32; font-size: 48px; }
+              h1 { margin: 20px 0; }
+              .button { display: inline-block; padding: 12px 24px; background: #000; color: #fff; text-decoration: none; border-radius: 6px; margin-top: 20px; }
+            </style>
+          </head>
+          <body>
+            <div class="success">✅</div>
+            <h1>Autoryzacja zakończona pomyślnie!</h1>
+            <p>Token został zapisany w bazie danych.</p>
+            <p>Możesz teraz zamknąć to okno lub wrócić do panelu zarządzania.</p>
+            <a href="/token" class="button">Powrót do Token Manager</a>
+            <script>
+              // Auto-close after 3 seconds
+              setTimeout(() => {
+                window.close();
+              }, 3000);
+            </script>
+          </body>
+          </html>
+        `);
+      } catch (error) {
+        logger.error('[OAuth Callback] Error processing callback', error);
+        res.writeHead(500, { 'Content-Type': 'text/html; charset=utf-8' });
+        res.end(`
+          <!DOCTYPE html>
+          <html>
+          <head>
+            <title>Błąd</title>
+            <style>
+              body { font-family: Arial, sans-serif; max-width: 600px; margin: 50px auto; padding: 20px; text-align: center; }
+              .error { color: #d32f2f; }
+            </style>
+          </head>
+          <body>
+            <h1 class="error">Błąd podczas zapisywania tokena</h1>
+            <p>${error instanceof Error ? error.message : 'Nieznany błąd'}</p>
+            <a href="/token">Spróbuj ponownie</a>
+          </body>
+          </html>
+        `);
+      }
+      return;
+    }
+
+    if (path === '/api/v1/token/status' && req.method === 'GET') {
+      try {
+        const status = await checkTokenStatus();
+        res.writeHead(200, { 'Content-Type': 'application/json', ...corsHeaders });
+        res.end(JSON.stringify(status));
+      } catch (error) {
+        logger.error('[Token API] Error checking status', error);
+        res.writeHead(500, { 'Content-Type': 'application/json', ...corsHeaders });
+        res.end(JSON.stringify({
+          error: error instanceof Error ? error.message : 'Unknown error',
+        }));
+      }
+      return;
+    }
+    
+    if (path === '/api/v1/token/check' && req.method === 'POST') {
+      try {
+        const result = await checkRefreshToken();
+        if (result.success) {
+          res.writeHead(200, { 'Content-Type': 'application/json', ...corsHeaders });
+          res.end(JSON.stringify(result));
+        } else {
+          res.writeHead(200, { 'Content-Type': 'application/json', ...corsHeaders });
+          res.end(JSON.stringify(result));
+        }
+      } catch (error) {
+        logger.error('[Token API] Error checking refresh token', error);
+        res.writeHead(500, { 'Content-Type': 'application/json', ...corsHeaders });
+        res.end(JSON.stringify({
+          success: false,
+          error: error instanceof Error ? error.message : 'Unknown error',
+        }));
+      }
+      return;
+    }
+
     if ((path === '/api/v1/chat' || path === '/api/chat') && req.method === 'POST') {
       if (!verifyApiKey(req)) {
         logger.warn(`[Chat API] Unauthorized request from ${req.headers['x-forwarded-for'] || req.socket.remoteAddress}`);
@@ -152,6 +333,7 @@ function startHealthServer(chatService: ChatService | null) {
 
   server.listen(port, '0.0.0.0', () => {
     logger.info(`HTTP server listening on port ${port}`);
+    logger.info(`Token Manager UI available at http://localhost:${port}/token`);
     if (config.chatApiKey) {
       logger.info(`Chat API enabled at /api/v1/chat (protected by API key)`);
       logger.info(`Legacy endpoint /api/chat also available (will be deprecated)`);
@@ -177,15 +359,23 @@ async function main() {
 
     const healthServer = startHealthServer(chatService);
 
-    const refreshToken = process.env.GOOGLE_REFRESH_TOKEN;
-    if (!refreshToken) {
-      logger.error('GOOGLE_REFRESH_TOKEN not set. Please authorize the application first.');
-      process.exit(1);
+    let auth: ReturnType<typeof createGoogleAuth> | undefined;
+    try {
+      auth = await getAuthenticatedClient();
+    } catch (error) {
+      if (process.argv.includes('--watch-all') || process.argv.includes('--gmail-sync') || 
+          process.argv.includes('--email-automation') || process.argv.includes('--all')) {
+        logger.error('No refresh token found. Please authorize through /token UI first.');
+        process.exit(1);
+      } 
+      logger.warn('No refresh token found. Some features will be unavailable.');
     }
 
-    const auth = await getAuthenticatedClient(refreshToken);
-
     if (process.argv.includes('--rag-refresh') || process.argv.includes('--all')) {
+      if (!auth) {
+        logger.error('Authentication required for RAG refresh');
+        process.exit(1);
+      }
       logger.info('Running RAG refresher...');
       const ragRefresher = new RagRefresher(auth);
       await ragRefresher.initialize();
@@ -193,6 +383,10 @@ async function main() {
     }
 
     if (process.argv.includes('--gmail-sync') || process.argv.includes('--all')) {
+      if (!auth) {
+        logger.error('Authentication required for Gmail sync');
+        process.exit(1);
+      }
       logger.info('Running Gmail sync to Drive...');
       const gmailSyncer = new GmailSyncer(auth);
       
@@ -207,6 +401,10 @@ async function main() {
             const count = await gmailSyncer.syncNewMessages();
             if (count > 0) {
               logger.info(`Synced ${count} new messages. Triggering RAG refresh...`);
+              if (!auth) {
+                logger.error('Authentication required for RAG refresh');
+                return;
+              }
               const ragRefresher = new RagRefresher(auth);
               await ragRefresher.initialize();
               await ragRefresher.syncRagFromDrive();
@@ -237,18 +435,30 @@ async function main() {
     }
 
     if (process.argv.includes('--fentiks-sync') || process.argv.includes('--all')) {
+      if (!auth) {
+        logger.error('Authentication required for Fentiks sync');
+        process.exit(1);
+      }
       logger.info('Running Fentiks schedule scraping and sync to Drive...');
       const fentiksSyncer = new FentiksSyncer(auth);
       await fentiksSyncer.syncFentiksToDrive();
     }
 
     if (process.argv.includes('--email-automation') || process.argv.includes('--all')) {
+      if (!auth) {
+        logger.error('Authentication required for email automation');
+        process.exit(1);
+      }
       logger.info('Running email automation...');
       const emailAutomation = new EmailAutomation(auth);
       await emailAutomation.main();
     }
 
     if (process.argv.includes('--watch-all')) {
+      if (!auth) {
+        logger.error('Authentication required for watch-all mode');
+        process.exit(1);
+      }
       logger.info('========================================');
       logger.info('Starting FULL AUTOMATION in watch mode');
       logger.info('========================================');
@@ -318,6 +528,10 @@ async function main() {
       const syncFentiks = async () => {
         try {
           logger.info('[Fentiks Sync] Scraping fentiks.pl and syncing to Drive...');
+          if (!auth) {
+            logger.error('Authentication required for Fentiks sync');
+            return;
+          }
           const fentiksSyncer = new FentiksSyncer(auth);
           const count = await fentiksSyncer.syncFentiksToDrive();
           logger.info(`[Fentiks Sync] Synced ${count} entries`);
