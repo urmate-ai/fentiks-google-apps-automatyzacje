@@ -50,13 +50,13 @@ const ConfigSchema = z.object({
   chatApiKey: z.string().optional(),
   
   watchIntervals: z.object({
-    gmailSync: z.number().positive().default(5 * 60 * 1000),
-    emailAutomation: z.number().positive().default(10 * 60 * 1000),
+    gmailSync: z.number().positive().default(30 * 60 * 1000),
+    emailAutomation: z.number().positive().default(5 * 60 * 1000),
     driveWatch: z.number().positive().default(15 * 60 * 1000),
     fentiksSync: z.number().positive().default(60 * 60 * 1000),
   }).default({
-    gmailSync: 5 * 60 * 1000,
-    emailAutomation: 10 * 60 * 1000,
+    gmailSync: 30 * 60 * 1000,
+    emailAutomation: 5 * 60 * 1000,
     driveWatch: 15 * 60 * 1000,
     fentiksSync: 60 * 60 * 1000,
   }),

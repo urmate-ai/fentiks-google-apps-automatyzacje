@@ -8,6 +8,7 @@ import {
   ParsedMessage,
 } from './parser.js';
 import { SpamFilter } from './spam-filter.js';
+import { retryWithGmailRateLimit, sleep } from '../shared/utils/index.js';
 
 const MILLIS_PER_DAY = 24 * 60 * 60 * 1000;
 const DEFAULT_DAYS_BACK = 180;
@@ -139,11 +140,13 @@ export class GmailSyncer {
 
     do {
       try {
-        const response = await this.gmail.users.messages.list({
-          userId: 'me',
-          q: query,
-          maxResults: Math.min(limit - messages.length, 500),
-          pageToken,
+        const response = await retryWithGmailRateLimit(async () => {
+          return await this.gmail.users.messages.list({
+            userId: 'me',
+            q: query,
+            maxResults: Math.min(limit - messages.length, 500),
+            pageToken,
+          });
         });
 
         const batch = response.data.messages || [];
@@ -154,8 +157,13 @@ export class GmailSyncer {
         if (messages.length >= limit) {
           break;
         }
+
+        // Add delay between pagination requests to avoid rate limits
+        if (pageToken) {
+          await sleep(1000); // 1 second delay between pages
+        }
       } catch (error) {
-        logger.error('Error fetching messages', error);
+        logger.error('Error fetching messages after retries', error);
         break;
       }
     } while (pageToken && messages.length < limit);
@@ -190,18 +198,26 @@ export class GmailSyncer {
     logger.info(`Processing ${messageIds.length} messages`);
 
     const messages: gmail_v1.Schema$Message[] = [];
-    for (const msgId of messageIds) {
+    for (let i = 0; i < messageIds.length; i++) {
+      const msgId = messageIds[i];
       if (!msgId.id) continue;
 
       try {
-        const message = await this.gmail.users.messages.get({
-          userId: 'me',
-          id: msgId.id,
-          format: 'full',
+        const message = await retryWithGmailRateLimit(async () => {
+          return await this.gmail.users.messages.get({
+            userId: 'me',
+            id: msgId.id!,
+            format: 'full',
+          });
         });
         messages.push(message.data);
+        
+        // Add delay between requests to avoid rate limits (1 request per second)
+        if (i < messageIds.length - 1) {
+          await sleep(1200); // 1.2 seconds between requests for safety margin
+        }
       } catch (error) {
-        logger.error(`Error fetching message ${msgId.id}`, error);
+        logger.error(`Error fetching message ${msgId.id} after retries`, error);
       }
     }
 
