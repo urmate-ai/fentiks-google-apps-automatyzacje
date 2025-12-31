@@ -98,19 +98,34 @@ function startHealthServer(chatService: ChatService | null) {
         const __filename = fileURLToPath(import.meta.url);
         const __dirname = pathModule.dirname(__filename);
         
-        const baseDir = __dirname.endsWith('dist') 
-          ? pathModule.join(__dirname, '..', 'src')
-          : __dirname;
+        const uiPath = pathModule.join(__dirname, 'token-manager', 'ui.html');
         
-        const uiPath = pathModule.join(baseDir, 'token-manager', 'ui.html');
         const html = await fs.readFile(uiPath, 'utf-8');
         
         res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
         res.end(html);
       } catch (error) {
         logger.error('[Token UI] Error serving UI', error);
-        res.writeHead(500, { 'Content-Type': 'text/plain' });
-        res.end('Error loading token manager UI');
+        res.writeHead(500, { 'Content-Type': 'text/html; charset=utf-8' });
+        res.end(`
+          <!DOCTYPE html>
+          <html>
+          <head>
+            <title>Błąd ładowania UI</title>
+            <style>
+              body { font-family: Arial, sans-serif; max-width: 600px; margin: 50px auto; padding: 20px; }
+              .error { color: #d32f2f; background: #ffebee; padding: 15px; border-radius: 4px; margin: 20px 0; }
+            </style>
+          </head>
+          <body>
+            <h1>❌ Błąd ładowania Token Manager UI</h1>
+            <div class="error">
+              <strong>Błąd:</strong> ${error instanceof Error ? error.message : 'Nieznany błąd'}
+            </div>
+            <p>Sprawdź logi serwera dla szczegółów.</p>
+          </body>
+          </html>
+        `);
       }
       return;
     }

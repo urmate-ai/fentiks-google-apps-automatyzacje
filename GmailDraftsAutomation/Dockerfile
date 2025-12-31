@@ -11,6 +11,10 @@ COPY src ./src
 
 RUN npm run build
 
+# Copy HTML assets to dist
+RUN mkdir -p dist/token-manager && \
+    cp src/token-manager/ui.html dist/token-manager/ui.html
+
 FROM node:20-alpine AS production
 
 WORKDIR /app
