@@ -555,21 +555,30 @@ async function main() {
         }
       };
 
-      await syncGmail();
-      await runEmailAutomation();
-      await checkDriveChanges();
-      await syncFentiks();
-
       const gmailInterval = setInterval(syncGmail, gmailSyncInterval);
       const emailInterval = setInterval(runEmailAutomation, emailAutomationInterval);
       const driveWatchIntervalId = setInterval(checkDriveChanges, driveWatchInterval);
       const fentiksInterval = setInterval(syncFentiks, fentiksSyncInterval);
 
-      const cleanup = () => {
+      logger.info('Watch mode active. Intervals started. Running initial tasks in background...');
+      
+      Promise.all([
+        syncGmail().catch(err => logger.error('[Initial Gmail Sync] Error', err)),
+        runEmailAutomation().catch(err => logger.error('[Initial Email Automation] Error', err)),
+        checkDriveChanges().catch(err => logger.error('[Initial Drive Watch] Error', err)),
+        syncFentiks().catch(err => logger.error('[Initial Fentiks Sync] Error', err)),
+      ]).then(() => {
+        logger.info('Initial tasks completed. Watch mode fully active.');
+      });
+
+      const cleanup = async () => {
+        logger.info('Received shutdown signal. Cleaning up...');
         clearInterval(gmailInterval);
         clearInterval(emailInterval);
         clearInterval(driveWatchIntervalId);
         clearInterval(fentiksInterval);
+        logger.info('Intervals stopped. Closing database connections...');
+        await closePool();
         logger.info('Stopping watch-all mode...');
         process.exit(0);
       };
