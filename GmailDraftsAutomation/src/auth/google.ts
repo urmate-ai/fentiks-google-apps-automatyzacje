@@ -31,7 +31,7 @@ export async function getAuthenticatedClient(
   const auth = createGoogleAuth();
 
   if (!refreshToken) {
-    refreshToken = await getRefreshToken('google') || process.env.GOOGLE_REFRESH_TOKEN || undefined;
+    refreshToken = await getRefreshToken('google') || undefined;
   }
 
   if (refreshToken) {

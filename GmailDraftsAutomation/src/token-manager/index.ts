@@ -12,10 +12,7 @@ export interface TokenStatus {
 }
 
 export async function checkTokenStatus(forceRefresh: boolean = false): Promise<TokenStatus> {
-  let refreshToken = await getRefreshToken('google');
-  if (!refreshToken) {
-    refreshToken = process.env.GOOGLE_REFRESH_TOKEN || null;
-  }
+  const refreshToken = await getRefreshToken('google');
   
   const status: TokenStatus = {
     isValid: false,
