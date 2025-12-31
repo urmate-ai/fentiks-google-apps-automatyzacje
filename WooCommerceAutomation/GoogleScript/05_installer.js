@@ -647,8 +647,6 @@ function generateCertificate() {
 }
 
 function processCertificateData(data) {
-  SpreadsheetApp.getUi().alert("⏳ Generowanie certyfikatów...\\n\\nProszę czekać...");
-  
   try {
     var sheetData = getSheetData();
     
@@ -670,6 +668,7 @@ function processCertificateData(data) {
     var processedCount = 0;
     var successCount = 0;
     var errorCount = 0;
+    var errorDetails = [];
     
     for (var i = 0; i < dataRows.length; i++) {
       var row = dataRows[i];
@@ -730,6 +729,8 @@ function processCertificateData(data) {
       } catch (docError) {
         errorCount++;
         var errorMsg = docError.toString();
+        var personName = ((personData.firstName || "") + " " + (personData.lastName || "")).trim() || "Brak nazwy";
+        errorDetails.push("#" + processedCount + " " + personName + ": " + errorMsg.substring(0, 100));
         logError("Błąd podczas generowania dokumentu dla osoby #" + processedCount + " (" + personData.firstName + " " + personData.lastName + "):", docError);
       }
     }
@@ -738,9 +739,11 @@ function processCertificateData(data) {
     feedback += "Przetworzono: " + processedCount + " " + (processedCount === 1 ? "osobę" : "osób") + "\\n";
     feedback += "Sukces: " + successCount + "\\n";
     if (errorCount > 0) {
-      feedback += "Błędy: " + errorCount + "\\n";
+      feedback += "Błędy: " + errorCount + "\\n\\n";
+      feedback += "Szczegóły błędów:\\n" + errorDetails.join("\\n");
+    } else {
+      feedback += "\\nWszystkie dokumenty zostały zapisane w folderze \\"Dyplomy\\" w lokalizacji arkusza.";
     }
-    feedback += "\\nWszystkie dokumenty zostały zapisane w folderze arkusza.";
     
     if (processedCount === 0) {
       SpreadsheetApp.getUi().alert("⚠️ Nie znaleziono żadnych danych osobowych w arkuszu.");
@@ -749,7 +752,8 @@ function processCertificateData(data) {
     }
   } catch (e) {
     logError("Błąd podczas przetwarzania danych certyfikatu", e);
-    SpreadsheetApp.getUi().alert("❌ Błąd: " + e.toString());
+    var errorMsg = "❌ Błąd krytyczny:\\n\\n" + e.toString() + "\\n\\nStack:\\n" + (e.stack || "Brak stack trace");
+    SpreadsheetApp.getUi().alert(errorMsg);
     throw e;
   }
 }
@@ -846,21 +850,46 @@ function extractPersonData(row, columnIndices, rowNumber, lpValue, birthDateValu
 }
 
 function generateCertificateDocument(personData, formData, personNumber) {
-  var DOC_TEMPLATE_ID = "1GI2DIIvK4CsxR-Ck0qStDMbwOmkrwirnLT5Mw5KGXLM";
+  var DOC_TEMPLATE_ID = "1DfiSDfWhcbrbwPikIE2FAh74drU1bk8U081jZ9q7HzM";
   
   var debugMessages = [];
   
   try {
     debugMessages.push("🔍 Rozpoczynam generowanie dla: " + personData.firstName + " " + personData.lastName);
     
-    var templateFile = DriveApp.getFileById(DOC_TEMPLATE_ID);
-    debugMessages.push("📄 Szablon: " + templateFile.getName());
+    var templateFile;
+    try {
+      templateFile = DriveApp.getFileById(DOC_TEMPLATE_ID);
+      debugMessages.push("📄 Szablon: " + templateFile.getName());
+    } catch (fileError) {
+      var errorDetails = "Nie można znaleźć szablonu dokumentu (ID: " + DOC_TEMPLATE_ID + "). Sprawdź:\\n" +
+        "1. Czy szablon istnieje w Google Drive\\n" +
+        "2. Czy masz dostęp do szablonu\\n" +
+        "3. Czy ID szablonu jest poprawne\\n\\n" +
+        "Błąd: " + fileError.toString();
+      throw new Error(errorDetails);
+    }
     
     var spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
     var spreadsheetFile = DriveApp.getFileById(spreadsheet.getId());
     var parentFolders = spreadsheetFile.getParents();
-    var targetFolder = parentFolders.hasNext() ? parentFolders.next() : DriveApp.getRootFolder();
-    debugMessages.push("📁 Folder: " + targetFolder.getName());
+    var parentFolder = parentFolders.hasNext() ? parentFolders.next() : DriveApp.getRootFolder();
+    debugMessages.push("📁 Folder rodzica: " + parentFolder.getName());
+    
+    var diplomasFolderName = "Dyplomy";
+    var diplomasFolder = null;
+    var folders = parentFolder.getFoldersByName(diplomasFolderName);
+    
+    if (folders.hasNext()) {
+      diplomasFolder = folders.next();
+      debugMessages.push("📁 Znaleziono folder: " + diplomasFolderName);
+    } else {
+      diplomasFolder = parentFolder.createFolder(diplomasFolderName);
+      debugMessages.push("📁 Utworzono folder: " + diplomasFolderName);
+    }
+    
+    var targetFolder = diplomasFolder;
+    debugMessages.push("📁 Docelowy folder: " + targetFolder.getName());
     
     var fileName = (personData.firstName || "") + " " + (personData.lastName || "") + " zaświadczenie";
     fileName = fileName.trim();

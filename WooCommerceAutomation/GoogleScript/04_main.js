@@ -216,8 +216,6 @@ function generateCertificate() {
 }
 
 function processCertificateData(data) {
-  SpreadsheetApp.getUi().alert("⏳ Generowanie certyfikatów...\n\nProszę czekać...");
-  
   try {
     const sheetData = getSheetData();
     
@@ -239,6 +237,7 @@ function processCertificateData(data) {
     let processedCount = 0;
     let successCount = 0;
     let errorCount = 0;
+    let errorDetails = [];
     
     for (let i = 0; i < dataRows.length; i++) {
       const row = dataRows[i];
@@ -299,6 +298,8 @@ function processCertificateData(data) {
       } catch (docError) {
         errorCount++;
         const errorMsg = docError.toString();
+        const personName = `${personData.firstName || ''} ${personData.lastName || ''}`.trim() || 'Brak nazwy';
+        errorDetails.push(`#${processedCount} ${personName}: ${errorMsg.substring(0, 100)}`);
         logError(`Błąd podczas generowania dokumentu dla osoby #${processedCount} (${personData.firstName} ${personData.lastName}):`, errorMsg);
       }
     }
@@ -310,14 +311,17 @@ function processCertificateData(data) {
       feedback += `Przetworzono: ${processedCount} ${processedCount === 1 ? 'osobę' : 'osób'}\n`;
       feedback += `Sukces: ${successCount}\n`;
       if (errorCount > 0) {
-        feedback += `Błędy: ${errorCount}\n`;
+        feedback += `Błędy: ${errorCount}\n\n`;
+        feedback += `Szczegóły błędów:\n${errorDetails.join('\n')}`;
+      } else {
+        feedback += `\nWszystkie dokumenty zostały zapisane w folderze "Dyplomy" w lokalizacji arkusza.`;
       }
-      feedback += `\nWszystkie dokumenty zostały zapisane w folderze arkusza.`;
       SpreadsheetApp.getUi().alert(feedback);
     }
   } catch (e) {
     logError("Błąd podczas przetwarzania danych certyfikatu", e);
-    SpreadsheetApp.getUi().alert(`❌ Błąd: ${e.toString()}`);
+    const errorMsg = `❌ Błąd krytyczny:\n\n${e.toString()}\n\nStack:\n${e.stack || 'Brak stack trace'}`;
+    SpreadsheetApp.getUi().alert(errorMsg);
     throw e;
   }
 }
@@ -406,21 +410,46 @@ function extractPersonData(row, columnIndices, rowNumber, lpValue = null, birthD
 }
 
 function generateCertificateDocument(personData, formData, personNumber) {
-  const DOC_TEMPLATE_ID = "1GI2DIIvK4CsxR-Ck0qStDMbwOmkrwirnLT5Mw5KGXLM";
+  const DOC_TEMPLATE_ID = "1DfiSDfWhcbrbwPikIE2FAh74drU1bk8U081jZ9q7HzM";
   
   let debugMessages = [];
   
   try {
     debugMessages.push(`🔍 Rozpoczynam generowanie dla: ${personData.firstName} ${personData.lastName}`);
     
-    const templateFile = DriveApp.getFileById(DOC_TEMPLATE_ID);
-    debugMessages.push(`📄 Szablon: ${templateFile.getName()}`);
+    let templateFile;
+    try {
+      templateFile = DriveApp.getFileById(DOC_TEMPLATE_ID);
+      debugMessages.push(`📄 Szablon: ${templateFile.getName()}`);
+    } catch (fileError) {
+      const errorDetails = `Nie można znaleźć szablonu dokumentu (ID: ${DOC_TEMPLATE_ID}). Sprawdź:\n` +
+        `1. Czy szablon istnieje w Google Drive\n` +
+        `2. Czy masz dostęp do szablonu\n` +
+        `3. Czy ID szablonu jest poprawne\n\n` +
+        `Błąd: ${fileError.toString()}`;
+      throw new Error(errorDetails);
+    }
     
     const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
     const spreadsheetFile = DriveApp.getFileById(spreadsheet.getId());
     const parentFolders = spreadsheetFile.getParents();
-    const targetFolder = parentFolders.hasNext() ? parentFolders.next() : DriveApp.getRootFolder();
-    debugMessages.push(`📁 Folder: ${targetFolder.getName()}`);
+    const parentFolder = parentFolders.hasNext() ? parentFolders.next() : DriveApp.getRootFolder();
+    debugMessages.push(`📁 Folder rodzica: ${parentFolder.getName()}`);
+    
+    const diplomasFolderName = "Dyplomy";
+    let diplomasFolder = null;
+    const folders = parentFolder.getFoldersByName(diplomasFolderName);
+    
+    if (folders.hasNext()) {
+      diplomasFolder = folders.next();
+      debugMessages.push(`📁 Znaleziono folder: ${diplomasFolderName}`);
+    } else {
+      diplomasFolder = parentFolder.createFolder(diplomasFolderName);
+      debugMessages.push(`📁 Utworzono folder: ${diplomasFolderName}`);
+    }
+    
+    const targetFolder = diplomasFolder;
+    debugMessages.push(`📁 Docelowy folder: ${targetFolder.getName()}`);
     
     const fileName = `${personData.firstName || ""} ${personData.lastName || ""} zaświadczenie`.trim();
     debugMessages.push(`📝 Nazwa pliku: ${fileName}`);
@@ -446,20 +475,23 @@ function generateCertificateDocument(personData, formData, personNumber) {
     };
     
     let replacedCount = 0;
-    for (const [placeholder, value] of Object.entries(replacements)) {
-      try {
-        const beforeText = body.getText();
-        body.replaceText(placeholder, value);
-        const afterText = body.getText();
-        if (beforeText !== afterText) {
-          replacedCount++;
-          debugMessages.push(`✓ ${placeholder} → ${value.substring(0, 30)}${value.length > 30 ? '...' : ''}`);
-        } else {
-          debugMessages.push(`⚠ ${placeholder} - nie znaleziono w dokumencie`);
+    for (const placeholder in replacements) {
+      if (replacements.hasOwnProperty(placeholder)) {
+        const value = replacements[placeholder];
+        try {
+          const beforeText = body.getText();
+          body.replaceText(placeholder, value);
+          const afterText = body.getText();
+          if (beforeText !== afterText) {
+            replacedCount++;
+            debugMessages.push(`✓ ${placeholder} → ${value.substring(0, 30)}${value.length > 30 ? '...' : ''}`);
+          } else {
+            debugMessages.push(`⚠ ${placeholder} - nie znaleziono w dokumencie`);
+          }
+        } catch (replaceError) {
+          debugMessages.push(`❌ Błąd przy ${placeholder}: ${replaceError.toString()}`);
+          logError(`Błąd podczas zastępowania placeholder ${placeholder}:`, replaceError);
         }
-      } catch (replaceError) {
-        debugMessages.push(`❌ Błąd przy ${placeholder}: ${replaceError.toString()}`);
-        logError(`Błąd podczas zastępowania placeholder ${placeholder}:`, replaceError);
       }
     }
     debugMessages.push(`📊 Zastąpiono ${replacedCount}/${Object.keys(replacements).length} placeholderów`);

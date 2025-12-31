@@ -193,3 +193,4 @@ If you're migrating from the old structure where:
 - **Minimal Reads**: Only read files when necessary
 - **Append-Only**: Emails appended to daily files (no full file rewrites)
 
+
