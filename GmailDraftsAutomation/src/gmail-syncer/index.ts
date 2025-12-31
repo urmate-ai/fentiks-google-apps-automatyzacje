@@ -1,7 +1,14 @@
 import { gmail_v1, google } from 'googleapis';
 import { logger } from '../shared/logger/index.js';
 import { config } from '../shared/config/index.js';
-import { GmailSyncerDriveService } from './drive.js';
+import { DriveService } from '../shared/drive/index.js';
+import {
+  getGmailKnowledgePath,
+  getGmailDailyFileName,
+  getProcessedEmailsFileName,
+  parseIsoDate,
+  validateFolderId,
+} from '../shared/drive/structure.js';
 import {
   parseMessage,
   buildGmailQuery,
@@ -22,12 +29,12 @@ interface ProcessedEmail {
 
 export class GmailSyncer {
   private gmail: gmail_v1.Gmail;
-  private driveService: GmailSyncerDriveService;
+  private driveService: DriveService;
   private spamFilter: SpamFilter;
 
   constructor(auth: any) {
     this.gmail = google.gmail({ version: 'v1', auth });
-    this.driveService = new GmailSyncerDriveService(auth);
+    this.driveService = new DriveService(auth);
     this.spamFilter = new SpamFilter();
   }
 
@@ -37,19 +44,18 @@ export class GmailSyncer {
   } {
     const isoDate = parsed.gmail.received_at;
     if (!isoDate) {
+      logger.warn(`Message ${parsed.gmail.message_id} has no received_at date`);
       return {
-        folderParts: ['unknown'],
+        folderParts: getGmailKnowledgePath('unknown'),
         fileName: 'undated.jsonl',
       };
     }
 
-    const year = isoDate.slice(0, 4);
-    const month = isoDate.slice(0, 7);
-    const day = isoDate.slice(0, 10);
-
+    const { year, month, date } = parseIsoDate(isoDate);
+    
     return {
-      folderParts: [year, month],
-      fileName: `${day}.jsonl`,
+      folderParts: getGmailKnowledgePath(year, month),
+      fileName: getGmailDailyFileName(date),
     };
   }
 
@@ -81,7 +87,14 @@ export class GmailSyncer {
     fileId: string;
   }> {
     try {
-      const fileId = await this.driveService.getOrCreateProcessedEmailsFile(rootFolderId);
+      const gmailKnowledgePath = getGmailKnowledgePath('', '');
+      const gmailKnowledgeFolderId = await this.driveService.ensureFolderPath(
+        rootFolderId,
+        [gmailKnowledgePath[0]]
+      );
+
+      const fileName = getProcessedEmailsFileName();
+      const fileId = await this.driveService.getOrCreateFile(gmailKnowledgeFolderId, fileName);
       const content = await this.driveService.readFileContent(fileId);
       const entries = this.parseProcessedEmails(content);
 
@@ -158,9 +171,8 @@ export class GmailSyncer {
           break;
         }
 
-        // Add delay between pagination requests to avoid rate limits
         if (pageToken) {
-          await sleep(1000); // 1 second delay between pages
+          await sleep(1000);
         }
       } catch (error) {
         logger.error('Error fetching messages after retries', error);
@@ -173,9 +185,7 @@ export class GmailSyncer {
   }
 
   async syncGmailToDrive(daysBack: number = DEFAULT_DAYS_BACK): Promise<number> {
-    if (!config.driveRootFolderId) {
-      throw new Error('RAG_REFRESHER_ROOT_FOLDER_ID not configured');
-    }
+    validateFolderId(config.driveRootFolderId, 'RAG_REFRESHER_ROOT_FOLDER_ID');
 
     logger.info(`Starting Gmail sync to Drive (last ${daysBack} days)`);
 
@@ -212,9 +222,8 @@ export class GmailSyncer {
         });
         messages.push(message.data);
         
-        // Add delay between requests to avoid rate limits (1 request per second)
         if (i < messageIds.length - 1) {
-          await sleep(1200); // 1.2 seconds between requests for safety margin
+          await sleep(1200);
         }
       } catch (error) {
         logger.error(`Error fetching message ${msgId.id} after retries`, error);
@@ -239,8 +248,7 @@ export class GmailSyncer {
         logger.warn(`Failed to parse message ${message.id}`);
         continue;
       }
-
-      // Classify email for spam/marketing
+      
       try {
         logger.debug(`Classifying email: ${parsed.gmail.subject} from ${parsed.participants.from?.email}`);
         const classification = await this.spamFilter.classifyEmail(parsed);
@@ -250,7 +258,6 @@ export class GmailSyncer {
           logger.info(
             `Skipping ${classification.isSpam ? 'spam' : 'marketing'} email: ${parsed.gmail.subject} (reason: ${classification.reason || 'unknown'}, confidence: ${classification.confidence || 0})`
           );
-          // Still mark as processed to avoid re-checking
           processedUpdates.push({
             gmail_id: parsed.gmail.message_id,
             received_internaldate_ms: parsed.gmail.received_internaldate_ms,
@@ -260,7 +267,6 @@ export class GmailSyncer {
         }
       } catch (error) {
         logger.warn(`Error classifying email ${parsed.gmail.message_id}, proceeding anyway`, error);
-        // If classification fails, proceed with saving (fail-safe)
       }
 
       try {
