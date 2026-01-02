@@ -127,7 +127,7 @@ Do NOT consider as quote requests:
       '- If "ready": create a full HTML reply in detected language using data from RAG context. Extract the actual numbers, facts, and information from RAG context.',
       '- If "template": create a brief HTML reply skeleton with [____] placeholders only when data is missing from RAG context.',
       '- Do not use signature in the response. Signature is added by the script after the response is generated.',
-      '- Always end the message politely with a closing phrase, such as "Z poważaniem," (for Polish) or "Best regards," (for English), but without any name or signature after it.',
+      '- Do NOT end with "Z poważaniem," or "Best regards," - the signature will be added automatically and already includes the closing phrase.',
       '- Use <br> for new lines. Placeholders must be exactly four underscores inside square brackets: [____].',
     ]
       .filter(Boolean)
@@ -367,9 +367,21 @@ Do NOT consider as quote requests:
 
     const sanitized = cleaned.replace(/\[____[^\]]*\]/g, '[____]');
 
-    const withSig = sanitized.includes(signature)
-      ? sanitized
-      : sanitized + (sanitized.endsWith('<br>') ? '' : '<br><br>') + signature;
+    const closingPhrases = [
+      /Z\s+poważaniem\s*,?\s*<br>\s*$/i,
+      /Best\s+regards\s*,?\s*<br>\s*$/i,
+      /Z\s+poważaniem\s*,?\s*$/i,
+      /Best\s+regards\s*,?\s*$/i,
+    ];
+    
+    let withoutClosing = sanitized;
+    for (const phrase of closingPhrases) {
+      withoutClosing = withoutClosing.replace(phrase, '').trim();
+    }
+
+    const withSig = withoutClosing.includes(signature)
+      ? withoutClosing
+      : withoutClosing + (withoutClosing.endsWith('<br>') ? '' : '<br><br>') + signature;
 
     const withPlaceholders = withSig.replace(
       /\[____[^\]]*\]/g,
