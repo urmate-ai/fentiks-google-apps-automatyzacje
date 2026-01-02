@@ -194,3 +194,4 @@ If you're migrating from the old structure where:
 - **Append-Only**: Emails appended to daily files (no full file rewrites)
 
 
+

@@ -30,8 +30,24 @@ const ConfigSchema = z.object({
   }),
   
   signatures: z.object({
-    pl: z.string().default('Mateusz Janota'),
-    en: z.string().default('Mateusz Janota'),
+    pl: z.string().default(
+      'Z poważaniem,<br><br>' +
+      'Ośrodek Kształcenia Elektryków Polskich „Fentiks"<br>' +
+      'ul. Wincentego Pola 27<br>' +
+      '44-100 Gliwice<br>' +
+      'tel. 789733333<br>' +
+      'biuro@fentiks.pl<br>' +
+      'www.fentiks.pl'
+    ),
+    en: z.string().default(
+      'Best regards,<br><br>' +
+      'Ośrodek Kształcenia Elektryków Polskich „Fentiks"<br>' +
+      'ul. Wincentego Pola 27<br>' +
+      '44-100 Gliwice<br>' +
+      'tel. 789733333<br>' +
+      'biuro@fentiks.pl<br>' +
+      'www.fentiks.pl'
+    ),
   }),
   
   systemContext: z.string().optional(),

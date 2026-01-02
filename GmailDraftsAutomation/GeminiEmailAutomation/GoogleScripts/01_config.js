@@ -30,8 +30,24 @@ const CFG = (() => {
   })();
 
   const signatures = {
-    PL: get("DEFAULT_SIGNATURE_PL", "Mateusz Janota"),
-    EN: get("DEFAULT_SIGNATURE_EN", "Mateusz Janota")
+    PL: get("DEFAULT_SIGNATURE_PL", 
+      "Z poważaniem,<br><br>" +
+      "Ośrodek Kształcenia Elektryków Polskich „Fentiks\"<br>" +
+      "ul. Wincentego Pola 27<br>" +
+      "44-100 Gliwice<br>" +
+      "tel. 789733333<br>" +
+      "biuro@fentiks.pl<br>" +
+      "www.fentiks.pl"
+    ),
+    EN: get("DEFAULT_SIGNATURE_EN",
+      "Best regards,<br><br>" +
+      "Ośrodek Kształcenia Elektryków Polskich „Fentiks\"<br>" +
+      "ul. Wincentego Pola 27<br>" +
+      "44-100 Gliwice<br>" +
+      "tel. 789733333<br>" +
+      "biuro@fentiks.pl<br>" +
+      "www.fentiks.pl"
+    )
   };
 
   const geminiContext = (() => {
