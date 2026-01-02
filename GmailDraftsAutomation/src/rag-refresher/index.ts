@@ -31,9 +31,9 @@ export class RagRefresher {
 
     logger.info('Starting RAG synchronization from Drive');
 
-    const fileIds = await this.driveService.listAllFileIdsRecursively(config.driveRootFolderId);
-    const fileIdSet = new Set(fileIds);
-    logger.info(`Found ${fileIds.length} files in Drive`);
+    const driveFiles = await this.driveService.listAllFilesRecursively(config.driveRootFolderId);
+    const fileIdSet = new Set(driveFiles.map(f => f.id));
+    logger.info(`Found ${driveFiles.length} files in Drive`);
 
     const existingDocuments = await this.vectorStore.listDocuments();
     const documentsIndex = new Map<string, string>();
@@ -41,7 +41,7 @@ export class RagRefresher {
       documentsIndex.set(doc.driveId, doc.id);
     });
 
-    const filesToImport = fileIds.filter((id) => !documentsIndex.has(id));
+    const filesToImport = driveFiles.filter((file) => !documentsIndex.has(file.id));
     const documentsToDelete: string[] = [];
 
     documentsIndex.forEach((documentId, driveId) => {
@@ -59,6 +59,13 @@ export class RagRefresher {
       `Files to import: ${filesToImport.length}, Documents to delete: ${documentsToDelete.length}`
     );
 
+    if (filesToImport.length > 0) {
+      logger.info('New files found on Drive:');
+      filesToImport.forEach((file, index) => {
+        logger.info(`  ${index + 1}. ${file.name} (ID: ${file.id})`);
+      });
+    }
+
     for (const documentId of documentsToDelete) {
       try {
         await this.vectorStore.deleteDocument(documentId);
@@ -69,7 +76,8 @@ export class RagRefresher {
     }
 
     if (filesToImport.length > 0) {
-      const batches = chunkArray(filesToImport, MAX_RESOURCE_IDS_PER_IMPORT);
+      const fileIdsToImport = filesToImport.map(f => f.id);
+      const batches = chunkArray(fileIdsToImport, MAX_RESOURCE_IDS_PER_IMPORT);
 
       for (let i = 0; i < batches.length; i++) {
         const batch = batches[i];
@@ -114,7 +122,10 @@ export class RagRefresher {
 
     const newFiles = driveFiles.filter((file) => !documentsIndex.has(file.id));
     if (newFiles.length > 0) {
-      logger.info(`Found ${newFiles.length} new files in Drive`);
+      logger.info(`Found ${newFiles.length} new files in Drive:`);
+      newFiles.forEach((file, index) => {
+        logger.info(`  ${index + 1}. ${file.name} (ID: ${file.id}, modified: ${file.modifiedTime})`);
+      });
       return true;
     }
 

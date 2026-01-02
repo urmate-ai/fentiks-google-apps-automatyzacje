@@ -15,8 +15,13 @@ export class DriveService {
   }
 
   async listAllFileIdsRecursively(rootFolderId: string): Promise<string[]> {
+    const files = await this.listAllFilesRecursively(rootFolderId);
+    return files.map(f => f.id);
+  }
+
+  async listAllFilesRecursively(rootFolderId: string): Promise<Array<{ id: string; name: string }>> {
     const visitedFolders = new Set<string>();
-    const collectedFileIds = new Set<string>();
+    const collectedFiles: Array<{ id: string; name: string }> = [];
 
     const crawl = async (folderId: string): Promise<void> => {
       if (visitedFolders.has(folderId)) {
@@ -37,7 +42,7 @@ export class DriveService {
             if (file.mimeType === 'application/vnd.google-apps.folder') {
               await crawl(file.id);
             } else {
-              collectedFileIds.add(file.id);
+              collectedFiles.push({ id: file.id, name: file.name });
             }
           }
         }
@@ -47,12 +52,12 @@ export class DriveService {
     };
 
     await crawl(rootFolderId);
-    return Array.from(collectedFileIds);
+    return collectedFiles;
   }
 
-  async listFilesWithMetadata(rootFolderId: string): Promise<Array<{ id: string; modifiedTime: string }>> {
+  async listFilesWithMetadata(rootFolderId: string): Promise<Array<{ id: string; name: string; modifiedTime: string }>> {
     const visitedFolders = new Set<string>();
-    const collectedFiles: Array<{ id: string; modifiedTime: string }> = [];
+    const collectedFiles: Array<{ id: string; name: string; modifiedTime: string }> = [];
 
     const crawl = async (folderId: string): Promise<void> => {
       if (visitedFolders.has(folderId)) {
@@ -75,6 +80,7 @@ export class DriveService {
             } else if (file.modifiedTime) {
               collectedFiles.push({
                 id: file.id,
+                name: file.name,
                 modifiedTime: file.modifiedTime,
               });
             }
