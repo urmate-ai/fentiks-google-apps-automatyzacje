@@ -444,7 +444,7 @@ async function main() {
         process.on('SIGTERM', cleanup);
         
       } else {
-        const daysBack = 180;
+        const daysBack = 7;
         await gmailSyncer.syncGmailToDrive(daysBack);
       }
     }

@@ -38,11 +38,11 @@ export class Embedder {
         openAIApiKey: config.openaiApiKey,
         modelName: config.ragEmbeddingModel,
       });
-      this.embeddingDimension = 1536; // OpenAI embedding dimension
+      this.embeddingDimension = 1536; 
       logger.info('Using OpenAI embeddings (dimension: 1536)');
     } else if (config.googleGenAiApiKey) {
       this.embeddings = new GoogleGenerativeAIEmbeddingsWrapper(config.googleGenAiApiKey);
-      this.embeddingDimension = 768; // Google embedding dimension
+      this.embeddingDimension = 768;
       logger.info('Using Google Generative AI embeddings (dimension: 768)');
     } else {
       throw new Error('No embedding API key configured');

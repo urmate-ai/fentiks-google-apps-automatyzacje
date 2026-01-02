@@ -18,7 +18,7 @@ import { SpamFilter } from './spam-filter.js';
 import { retryWithGmailRateLimit, sleep } from '../shared/utils/index.js';
 
 const MILLIS_PER_DAY = 24 * 60 * 60 * 1000;
-const DEFAULT_DAYS_BACK = 180;
+const DEFAULT_DAYS_BACK = 7;
 const MAX_MESSAGES_PER_RUN = 500;
 
 interface ProcessedEmail {
