@@ -611,17 +611,19 @@ async function main() {
   }
 }
 
-process.on('SIGINT', async () => {
-  logger.info('Received SIGINT, shutting down gracefully...');
-  await closePool();
-  process.exit(0);
-});
+if (!process.argv.includes('--watch') && !process.argv.includes('--watch-all')) {
+  process.on('SIGINT', async () => {
+    logger.info('Received SIGINT, shutting down gracefully...');
+    await closePool();
+    process.exit(0);
+  });
 
-process.on('SIGTERM', async () => {
-  logger.info('Received SIGTERM, shutting down gracefully...');
-  await closePool();
-  process.exit(0);
-});
+  process.on('SIGTERM', async () => {
+    logger.info('Received SIGTERM, shutting down gracefully...');
+    await closePool();
+    process.exit(0);
+  });
+}
 
 main();
 

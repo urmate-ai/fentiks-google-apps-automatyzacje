@@ -1,11 +1,11 @@
 services:
-  - type: worker
+  - type: web
     name: gmail-drafts-automation
     env: docker
     dockerfilePath: ./Dockerfile
     dockerContext: .
     plan: starter # lub free, starter, standard, pro
-    # Worker nie potrzebuje healthCheckPath (tylko dla web services)
+    healthCheckPath: /health
     envVars:
       - key: NODE_ENV
         value: production
