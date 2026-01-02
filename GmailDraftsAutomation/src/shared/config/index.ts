@@ -14,7 +14,7 @@ const ConfigSchema = z.object({
   openaiApiKey: z.string().optional(),
   googleGenAiApiKey: z.string().optional(),
   
-  llmModel: z.string().default('gpt-4-turbo-preview'),
+  llmModel: z.string().default('gpt-4o-mini'),
   llmTemperature: z.number().min(0).max(2).default(0.2),
   llmMaxTokens: z.number().positive().default(1024),
   

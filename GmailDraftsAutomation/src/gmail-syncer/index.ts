@@ -98,9 +98,19 @@ export class GmailSyncer {
       const content = await this.driveService.readFileContent(fileId);
       const entries = this.parseProcessedEmails(content);
 
-      const processedIds = new Set(entries.map((e) => e.gmail_id));
-      const timestamps = entries.map((e) => e.received_internaldate_ms).filter((t) => t > 0);
-      const oldestTimestamp = timestamps.length > 0 ? Math.min(...timestamps) : 0;
+      const processedIds = new Set<string>();
+      let oldestTimestamp = 0;
+      
+      for (const entry of entries) {
+        if (entry.gmail_id) {
+          processedIds.add(entry.gmail_id);
+        }
+        if (entry.received_internaldate_ms > 0) {
+          if (oldestTimestamp === 0 || entry.received_internaldate_ms < oldestTimestamp) {
+            oldestTimestamp = entry.received_internaldate_ms;
+          }
+        }
+      }
 
       logger.info(`Loaded ${entries.length} processed emails, oldest: ${new Date(oldestTimestamp).toISOString()}`);
 
