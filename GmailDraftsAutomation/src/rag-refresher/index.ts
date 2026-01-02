@@ -169,12 +169,35 @@ export class RagRefresher {
       return;
     }
 
-    const chunks = chunkText(text, 1000, 200);
+    const chunks = chunkText(text, 2000, 200);
     logger.debug(`Document ${driveId} split into ${chunks.length} chunks`);
+    
+    const MAX_CHARS_PER_CHUNK = 24000;
+    const validChunks: string[] = [];
+    const skippedChunks: number[] = [];
+    
+    chunks.forEach((chunk, index) => {
+      if (chunk.length > MAX_CHARS_PER_CHUNK) {
+        skippedChunks.push(index);
+        const estimatedTokens = Math.ceil(chunk.length / 3);
+        logger.warn(`Skipping chunk ${index} in document ${driveId}: ${chunk.length} chars (~${estimatedTokens} tokens), max is ${MAX_CHARS_PER_CHUNK} chars (~8000 tokens)`);
+      } else {
+        validChunks.push(chunk);
+      }
+    });
+    
+    if (skippedChunks.length > 0) {
+      logger.error(`Skipped ${skippedChunks.length} oversized chunks in document ${driveId} (${validChunks.length} valid chunks will be processed)`);
+    }
+    
+    if (validChunks.length === 0) {
+      logger.warn(`No valid chunks to process for document ${driveId}`);
+      return;
+    }
 
-    const embeddings = await this.embedder.embedDocuments(chunks);
+    const embeddings = await this.embedder.embedDocuments(validChunks);
 
-    const chunksWithEmbeddings = chunks.map((chunk, index) => ({
+    const chunksWithEmbeddings = validChunks.map((chunk, index) => ({
       content: chunk,
       embedding: embeddings[index],
     }));
@@ -189,7 +212,7 @@ export class RagRefresher {
       chunksWithEmbeddings
     );
 
-    logger.info(`Processed document ${driveId} with ${chunks.length} chunks`);
+    logger.info(`Processed document ${driveId} with ${chunksWithEmbeddings.length} chunks${skippedChunks.length > 0 ? ` (${skippedChunks.length} skipped)` : ''}`);
   }
 }
 

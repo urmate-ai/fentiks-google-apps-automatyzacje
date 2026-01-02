@@ -87,27 +87,40 @@ export function extractTextFromJsonl(entries: JsonlEntry[]): string {
     .join('\n\n---\n\n');
 }
 
-export function chunkText(text: string, chunkSize: number = 1000, overlap: number = 200): string[] {
+const CHARS_PER_TOKEN_ESTIMATE = 3;
+const MAX_TOKENS_FOR_EMBEDDING = 8000;
+const MAX_CHARS_PER_CHUNK = MAX_TOKENS_FOR_EMBEDDING * CHARS_PER_TOKEN_ESTIMATE;
+
+export function chunkText(text: string, chunkSize: number = 2000, overlap: number = 200): string[] {
   if (!text || text.length <= chunkSize) {
     return [text];
   }
 
+  const safeChunkSize = Math.min(chunkSize, MAX_CHARS_PER_CHUNK);
+  
   const chunks: string[] = [];
   let start = 0;
 
   while (start < text.length) {
-    const end = Math.min(start + chunkSize, text.length);
+    const end = Math.min(start + safeChunkSize, text.length);
     let chunk = text.slice(start, end);
+    
+    if (chunk.length > MAX_CHARS_PER_CHUNK) {
+      const subChunks = splitLargeChunk(chunk, MAX_CHARS_PER_CHUNK);
+      chunks.push(...subChunks);
+      start = text.length;
+      continue;
+    }
     
     if (end < text.length) {
       const lastPeriod = chunk.lastIndexOf('.');
       const lastNewline = chunk.lastIndexOf('\n');
       const breakPoint = Math.max(lastPeriod, lastNewline);
-      if (breakPoint > chunkSize * 0.5) {
+      if (breakPoint > safeChunkSize * 0.5) {
         chunk = chunk.slice(0, breakPoint + 1);
         start += breakPoint + 1 - overlap;
       } else {
-        start += chunkSize - overlap;
+        start += safeChunkSize - overlap;
       }
     } else {
       start = text.length;
@@ -117,5 +130,33 @@ export function chunkText(text: string, chunkSize: number = 1000, overlap: numbe
   }
 
   return chunks.filter((chunk) => chunk.length > 0);
+}
+
+function splitLargeChunk(chunk: string, maxSize: number): string[] {
+  const subChunks: string[] = [];
+  let start = 0;
+  
+  while (start < chunk.length) {
+    const end = Math.min(start + maxSize, chunk.length);
+    let subChunk = chunk.slice(start, end);
+    
+    if (end < chunk.length) {
+      const lastPeriod = subChunk.lastIndexOf('.');
+      const lastNewline = subChunk.lastIndexOf('\n');
+      const breakPoint = Math.max(lastPeriod, lastNewline);
+      if (breakPoint > maxSize * 0.5) {
+        subChunk = subChunk.slice(0, breakPoint + 1);
+        start += breakPoint + 1;
+      } else {
+        start += maxSize;
+      }
+    } else {
+      start = chunk.length;
+    }
+    
+    subChunks.push(subChunk.trim());
+  }
+  
+  return subChunks.filter((c) => c.length > 0);
 }
 
